@@ -28,7 +28,9 @@ function world_phone_menu($may_cache) {
 }
 
 /**
+ * FAPI definition for the admin settings form.
  *
+ * @ingroup forms
  */
 function world_phone_admin_settings() {
   $form = array(
@@ -206,14 +208,18 @@ function world_phone_field_formatter($field, $item, $formatter, $node) {
 }
 
 /**
+ * Format a dialable phone number.
  *
+ * @ingroup themeable
  */
 function theme_world_phone_dialable($number, $orig_number, $ccode) {
   return '<span class="world-phone">' . $number . '</span>';
 }
 
 /**
+ * Format a phone number for display.
  *
+ * @ingroup themeable
  */
 function theme_world_phone($number, $orig_number, $ccode) {
   return '<span class="world-phone">' . $number . '</span>';
@@ -414,7 +420,9 @@ function world_phone_number_validate($element) {
 }
 
 /**
- * Theme a world_phone_number form element.
+ * Format a world_phone_number form widget.
+ *
+ * @ingroup themeable
  **/
 function theme_world_phone_number($element) {
   drupal_add_css(drupal_get_path('module', 'world_phone') . '/world_phone.css');
@@ -610,10 +618,15 @@ function _world_phone_number_remove_country_code($number) {
 }
 
 /**
- * Extract the country code for a given phone number and return it. Return
- * NULL if the code cannot be identified. Note that unless $require_prefix is
- * FALSE, the number must begin with a + or it will be assumed not to have a
- * country code.
+ * Parse a string containing a phone number, extract the country code portion, and
+ * return it.
+ *
+ * @param $number
+ *   A string containing a phone number.
+ * @param $require_prefix
+ *   A Boolean. If TRUE, the $number must begin with a + or it will be assumed not to contain a country code.
+ * @return
+ *   A string containing a country code, or NULL if the country code cannot be identified. 
  */
 function world_phone_country_code_from_number($number, $require_prefix = TRUE) {
   if ($require_prefix && (! _world_phone_number_has_intl_prefix($number))) {
@@ -642,43 +655,61 @@ function world_phone_country_code_from_number($number, $require_prefix = TRUE) {
 }
 
 /**
- * Given a phone number and a separately-specified country code, return the
- *  proper country code to use for the number (as 'value') and the
- *  source it was obtained from (as 'source').
+ * Given a phone number string (which may or may not include a country code
+ * already) and, optionally, a separately-specified country code, determine
+ * which country code should be used for the number and return an array of
+ * information about it.
+ *
+ * @param $number
+ *   A string containing a phone number, possibly with a country code included in the string.
+ * @param $country_code
+ *   (Optional) A country code. This may be used for the number if the number doesn't already
+ *   include one.
+ * @return
+ *   An array specifying the country code that should be used, and how it was determined.
+ *   Array keys:
+ *   - value: The country code itself.
+ *   - source: A string indicating how the 'value' was determined. May be one of the
+ *     following strings:
+ *     - 'redundant': The number includes a country code which matches the
+ *        specified $country_code argument.
+ *     - 'conflict': The number's country code disagrees with the specified
+ *        $country_code argument, so the number's country code was assumed to be correct.
+ *     - 'number': The number includes a country code and no $country_code argument was
+ *        provided, so the number's code was used.
+ *     - 'country_code': The number does not include a country code, so the $country_code
+ *        argument was used.
+ *     - 'default': The number contains no country code and no $country_code argument was
+ *        provided, so the sitewide default country code was used.
  */
 function _world_phone_determine_country_code($number, $country_code = NULL) {
   $number_ccode = world_phone_country_code_from_number($number);
   if ($number_ccode && (! empty($country_code)) && $country_code == $number_ccode) {
     return array(
       'value' => $number_ccode,
-      // the number has a country code and the caller specified one, and they both agree
       'source' => 'redundant',
     );
   }
   if ($number_ccode && (! empty($country_code)) && ($country_code != '-1')) {
     return array(
       'value' => $number_ccode,
-      // the number's country code and the caller-specified code disagree, so use the number's
       'source' => 'conflict',
     );
   }
   if ($number_ccode) {
     return array(
       'value' => $number_ccode,
-      // the number has a country code and there is no other specified code
       'source' => 'number',
     );
   }
   if (empty($country_code) || $country_code == '-1') {
     return array(
       'value' => variable_get('world_phone_default_country_code', '1'),
-      // no code is specified, use the sitewide default
       'source' => 'default',
     );
   }
   return array(
     'value' => $country_code,
-    // the number had no code, but the caller specified one
     'source' => 'country_code',
   );
 }
@@ -686,19 +717,26 @@ function _world_phone_determine_country_code($number, $country_code = NULL) {
 /**
  *  Return a dialable version of the given number with the given country code.
  *
- *  @param $number The number to dial.
+ *  @param $number
+ *    The number to dial.
  *
- *  @param $country_code The country code to add to the $number. If the $number already begins
+ *  @param $country_code
+ *    The country code to add to the $number. If the $number already begins
  *    with + and includes a country code, this argument will be ignored.
  *
- * @param $from_country Optional: the country code of the country that we are
- *   dialing out from. If this is NULL or not provided no dial-out prefix will
- *   be added; otherwise the appropriate international dial-out prefix will be
- *   added to the number. (This is typically 00 accorting to ITU standards,
- *   but there are many country-by-country exceptions; see
- *   http://en.wikipedia.org/wiki/List_of_international_call_prefixes)
+ * @param $from_country
+ *   Optional: the country code of the country that we are dialing out
+ *   from. If this is not provided or is NULL, no dial-out prefix will be
+ *   added; otherwise the module will attempt to add the appropriate
+ *   international dial-out prefix to the number. (By default, this will be
+ *   00, which is according to ITU standards. But there are many
+ *   country-by-country exceptions; see
+ *   http://en.wikipedia.org/wiki/List_of_international_call_prefixes . If this
+ *   function does not work for your specific country you may need to write a hook.)
+ *   TODO: better documentation of this hook name
  *
- * @param $addl_args Optional: additional arguments to pass to the
+ * @param $addl_args
+ *   Optional: An array of additional arguments to pass to the
  *   country-specific formatter specified by $from_country. This may include,
  *   e.g., the local area code/numbering exchange of the phone we intend to
  *   dial out from.
@@ -717,7 +755,13 @@ function world_phone_number_to_dial($number, $country_code = NULL, $from_country
 }
 
 /**
- * Return a text version of the given country_code/value pair, with the country code included.
+ * Return a text representation of the given phone number, which is expressed
+ * as a country_code/value array.
+ *
+ * @param $wp_array
+ *   An array containing a phone number, with 'value' and 'country_code' keys.
+ * @return
+ *   A text representation of the phone number.
  */
 function world_phone_number_to_text($num) {
   $ccode = _world_phone_determine_country_code($num['value'], $num['country_code']);
@@ -776,7 +820,17 @@ function world_phone_country_info($ccode) {
 }
 
 /**
- * 
+ * Return an array of country names, sorted alphabetically by name, keyed by
+ * telephone country code.
+ *
+ * @param $theme
+ *   (Optional) The name of a theme function through which each country name
+ *   will be filtered before it is returned. The function must accept three
+ *   arguments: country abbreviation, country name, and country code.
+ * @return
+ *   An array with country codes as keys and country names (after theming, if
+ *   $theme was provided) as values. The array is sorted alphabetically by
+ *   country name.
  */
 function world_phone_country_list_by_code($theme = '') {
   $query = "SELECT abbrev, name, country_code as code, file, country_weight " .
@@ -797,7 +851,12 @@ function world_phone_country_list_by_code($theme = '') {
 }
 
 /**
+ * Return the country code that corresponds to the given country abbreviation.
  *
+ * @param $abbrev
+ *   An ISO 3166 two-letter country abbreviation.
+ * @return
+ *   A telephone country code.
  */
 function world_phone_country_code_for_abbrev($abbrev) {
   if (! empty($abbrev)) {
@@ -826,41 +885,55 @@ function world_phone_rebuild_country_table() {
 }
 
 /**
- *
+ * Helper function for sorting cache array by name.
  */
 function _world_phone_sort_cachearray_by_name($a, $b) {
   return strcmp($a[1], $b[1]);
 }
 
 /**
- * Return a row for an options list that is used to select countries for a phone number.
+ * Format a single country's row for the  options list that is used to select countries for a phone number.
  *
- * @param $abbrev The country's two-character abbreviation.
- * @param $name The country's full name.
- * @param $code The country code.
+ * @param $abbrev
+ *   The country's ISO 3166 two-letter country abbreviation.
+ * @param $name
+ *   The country's full name.
+ * @param $code
+ *   The country's telephone country code.
+ *
+ * @ingroup themeable
  */
 function theme_world_phone_option($abbrev, $name, $code) {
   return $name . ' +' . $code;
 }
 
 /**
- * Return a row for an options list that is used to select countries for a
+ * Format a row for an options list that is used to select countries for a
  * phone number. The row is kept short by abbreviating the country name if
  * needed.
  *
- * @param $abbrev The country's two-character abbreviation.
- * @param $name The country's full name.
- * @param $code The country code.
+ * @param $abbrev
+ *   The country's ISO 3166 two-letter country abbreviation.
+ * @param $name
+ *   The country's full name.
+ * @param $code
+ *   The country's telephone country code.
+ *
+ * @ingroup themeable
  */
 function theme_world_phone_short_option($abbrev, $name, $code) {  
   return str_repeat('&nbsp', 4 - strlen($code)) . '+' . $code . '&nbsp;&nbsp;' . $name;
 }
 
 /**
- * Custom theme for the phone select list. We need this to prevent Drupal from
- * helpfully stripping out the &nbsp; encodings that we use to line up the
- * columns in the dropdown. To accomplish that, this function duplicates
- * theme_select from Drupal core, but calls our own version of form_select_options. 
+ * Format the country select list for phone numbers.
+ *
+ * We need this special version of theme_select from Drupal core to prevent
+ * Drupal from helpfully stripping out the &nbsp; encodings that we use to
+ * line up the columns in the dropdown. This is just like the core version,
+ * but calls our own version of form_select_options.
+ *
+ * @ingroup themeable
  */
 function theme_world_phone_country_select($element) {
   $select = '';
@@ -872,7 +945,7 @@ function theme_world_phone_country_select($element) {
 
 /**
  * Duplicate of form_select_options from core, with one tiny change to remove
- * a check_plain in the final line. Ah, the occasional joys of Drupal theming!
+ * a check_plain in the final line.
  */
 function _world_phone_country_form_select_options($element, $choices = NULL) {
   if (!isset($choices)) {
