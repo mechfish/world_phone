@@ -2,7 +2,7 @@
 // The format of this array:
 // keys are phone number country codes, as defined by ITU-T recommendation E.164
 //  transcribed from http://www.itu.int/publ/T-SP-E.164D-2007/en (version 2007) on 28 Nov 2008.
-//  with additions from 
+
 // first entry is the ISO 3166-1 alpha-2 code, a two-letter code to represent countries;
 // second entry is the English short country name officially used by the ISO 3166 Maintenance Agency (ISO 3166/MA)
 //  Transcribed from http://www.iso.org/iso/iso-3166-1_decoding_table on 28 Nov 2008.
