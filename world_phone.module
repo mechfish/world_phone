@@ -10,8 +10,8 @@
 define('WORLD_PHONE_MAXLENGTH', 64);
 
 /**
-* Implementation of hook_simpletest().
-*/
+ * Implementation of hook_simpletest().
+ */
 function hook_simpletest() {
   $dir = drupal_get_path('module', 'world_phone') . '/tests';
   $tests = file_scan_directory($dir, '\.test$');
@@ -36,6 +36,9 @@ function world_phone_menu($may_cache) {
   return $items;
 }
 
+/**
+ *
+ */
 function world_phone_admin_settings() {
   $form = array(
     'site_country' => array(
@@ -196,10 +199,16 @@ function world_phone_field_formatter($field, $item, $formatter, $node) {
   return theme('world_phone', $formatted, check_plain($item['value']), check_plain($item['country_code']));
 }
 
+/**
+ *
+ */
 function theme_world_phone_dialable($number, $orig_number, $ccode) {
   return '<span class="world-phone">' . $number . '</span>';
 }
 
+/**
+ *
+ */
 function theme_world_phone($number, $orig_number, $ccode) {
   return '<span class="world-phone">' . $number . '</span>';
 }
@@ -292,7 +301,9 @@ function world_phone_widget($op, &$node, $field, &$items) {
   }                   
 }
 
-// world_phone_widget op 'prepare form values' -- helper function
+/**
+ * world_phone_widget op 'prepare form values' -- helper function
+ */
 function _world_phone_prepare_for_widget($field, $data) {
   $num = $data['value'];
   $ccode = _world_phone_determine_country_code($data['value'], $data['country_code']);
@@ -303,7 +314,9 @@ function _world_phone_prepare_for_widget($field, $data) {
   );
 }
 
-// world_phone_widget op 'form' -- helper function
+/**
+ *  world_phone_widget op 'form' -- helper function
+ */
 function _world_phone_widget_item_form($field, $phone, $title = NULL, $required = NULL) {
   $form = array(
     '#type' => 'world_phone_number',
@@ -448,6 +461,9 @@ function _world_phone_default_country_for_user($user) {
   return variable_get('world_phone_default_country_code', '1');
 }
 
+/**
+ *
+ */
 function _world_phone_number_validate($num_array) {
   $result = array();
   $ccode = _world_phone_determine_country_code($num_array['value'], $num_array['country_code']);
@@ -753,6 +769,9 @@ function world_phone_country_info($ccode) {
   return $result;
 }
 
+/**
+ * 
+ */
 function world_phone_country_list_by_code($theme = '') {
   $query = "SELECT abbrev, name, country_code as code, file, country_weight " .
     "FROM {world_phone_countries} " .
@@ -771,6 +790,9 @@ function world_phone_country_list_by_code($theme = '') {
   return $names;
 }
 
+/**
+ *
+ */
 function world_phone_country_code_for_abbrev($abbrev) {
   if (! empty($abbrev)) {
     $query = "SELECT country_code FROM {world_phone_countries} WHERE abbrev = '%s'";
@@ -797,6 +819,9 @@ function world_phone_rebuild_country_table() {
   }
 }
 
+/**
+ *
+ */
 function _world_phone_sort_cachearray_by_name($a, $b) {
   return strcmp($a[1], $b[1]);
 }
