@@ -161,19 +161,19 @@ function world_phone_field_formatter_info() {
   return array(
     'default' => array(
       'label' => 'Phone number, w/country code if outside site\'s country.',
-      'field types' => array('world_phone', 'text'),
+      'field types' => array('world_phone'),
     ),
     'with_country' => array(
       'label' => 'Phone number w/country code',
-      'field types' => array('world_phone', 'text'),
+      'field types' => array('world_phone'),
     ),
     'without_country' => array(
       'label' => 'Phone number without country code',
-      'field types' => array('world_phone', 'text'),
+      'field types' => array('world_phone'),
     ),
     'dialable' => array(
       'label' => 'Phone number in dialable format',
-      'field types' => array('world_phone', 'text'),
+      'field types' => array('world_phone'),
     ),
   );
  } 
@@ -232,7 +232,7 @@ function world_phone_widget_info() {
   return array(
     'world_phone' => array(
       'label' => t('World Phone Number'),
-      'field types' => array('world_phone', 'text'),
+      'field types' => array('world_phone'),
     ),
   );
 }
@@ -287,9 +287,6 @@ function world_phone_widget($op, &$node, $field, &$items) {
     
     case 'process form values':
       foreach ($items as $delta => $item) {
-        if ($field['type'] == 'text') {
-          $items[$delta]['value'] = world_phone_number_to_text($item);
-        }
         // do not save empty items beyond the first
         if ($item['value'] == '' && $delta > 0)  {
           unset($items[$delta]);
@@ -298,17 +295,7 @@ function world_phone_widget($op, &$node, $field, &$items) {
       break;
 
     case 'validate':
-      // validate the text field type, but not world_phone fields -- invalid data will be caught during field validation
-      if (is_array($items) && $field['type'] == 'text') {
-        foreach ($items as $delta => $item) {
-          if (! empty($item['value'])) {
-            $validation = _world_phone_number_validate($item);
-            foreach ($validation as $msg) {
-              form_set_error($field['field_name'], $msg);
-            }
-          }
-        }
-      }
+      // invalid data will be caught during field validation
       break;      
   }                   
 }
@@ -752,20 +739,6 @@ function world_phone_number_to_dial($number, $country_code = NULL, $from_country
   $to_dial = _world_phone_number_add_country_code($number, $ccode['value']);
   // remove all non-digits
   return preg_replace('/[^0-9]/', '', $to_dial);
-}
-
-/**
- * Return a text representation of the given phone number, which is expressed
- * as a country_code/value array.
- *
- * @param $wp_array
- *   An array containing a phone number, with 'value' and 'country_code' keys.
- * @return
- *   A text representation of the phone number.
- */
-function world_phone_number_to_text($num) {
-  $ccode = _world_phone_determine_country_code($num['value'], $num['country_code']);
-  return _world_phone_number_add_country_code($num['value'], $ccode['value']);
 }
 
 /*
