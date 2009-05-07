@@ -5,6 +5,11 @@ Things to accomplish before releasing this module:
   the countries/ directory for files which override the default
   behaviors.
 
+* Change the plugin system. It occurs to me that Drupal has one
+  already. And that the system I wrote for overriding the default
+  behavior of phone fields could just as well use Drupal's hook
+  system.
+
 * Remove the function which allows World Phone widgets to be used for
   text CCK fields. This is confusing, overcomplicated, and quite
   probably not useful.
@@ -18,3 +23,5 @@ Things to accomplish before releasing this module:
 
 * Remove leftover odds and ends of CSS from the CSS file. Do your
   level best to get rid of the !important flags.
+
+
