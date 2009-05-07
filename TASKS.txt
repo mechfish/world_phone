@@ -1,0 +1,17 @@
+Things to accomplish before releasing this module:
+
+* Remove the default dependence on wp_default files. Instead, build
+  the default behaviors and country lists into the module and only use
+  the countries/ directory for files which override the default
+  behaviors.
+
+* Remove the function which allows World Phone widgets to be used for
+  text CCK fields. This is confusing, overcomplicated, and quite
+  probably not useful.
+
+* Comment all the code in the main module.
+
+* Ascertain if we are really using the best possible method for
+  theming the World Phone widget. Should we be including the
+  Javascript in a different way? Ensure that the themer has many
+  options for tinkering with the final display.
