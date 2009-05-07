@@ -1,6 +1,11 @@
 <?php
 
+/**
+ * Return an array of country code information. Each element of the array is a smaller array with
+ * phone number country code, two-letter ISO 3166-1 code, and the short country name.
+ */
 function wp_default_country_codes() {
+  // retrieve the (long) list of all codes from a separate file
   include_once(drupal_get_path('module', 'world_phone') . '/countries/wp_default.inc');
   return wp_default_country_code_array();
 }
@@ -8,25 +13,23 @@ function wp_default_country_codes() {
 /**
  * Implementation of hook_format_number().
  *
- * Accepts a number and converts it to a canonical form to display to the
+ * Accept a phone number and convert it to a canonical form to display to the
  * user. The output is checked using check_plain to be sure it is safe to show
  * the user.
- * 
  */
-/*function wp_default_format_number($number, $country_code = NULL, $include_country_code = TRUE) {
-  return check_plain($number);
+function wp_default_format_number($number, $country_code = NULL, $include_country_code = TRUE) {
+  // return a blank value, to force the module to handle this using its default code
+  return '';
 }
-*/
 
 /**
  * Implementation of hook_validate_number()
  *
- * Accepts a number as entered by the user and returns an array of error
+ * Accept a number as entered by the user and return an array of error
  * messages if that number is not valid. If the number is valid, return an empty array.
  *
- * Note that unless it begins with '+' this number may not begin with the
- * appropriate country code -- the user may have specified the country code by
- * some other means.
+ * Note that unless it begins with '+' the $number may not contain a country
+ * code -- the user may have specified the country code by some other means.
  * 
  **/
 function wp_default_validate_number($number, $country_code) {
