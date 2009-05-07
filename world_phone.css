@@ -1,0 +1,80 @@
+/* $Id$ */
+
+.wp-widget .form-item {
+    display: inline;
+    font-family: monospace;
+}
+
+.wp-widget label {
+    display: block;
+    font-weight: bold;
+    padding-bottom: 0.3em;
+}
+
+.wp-widget select.wp-widget-country {
+    display: inline;
+    font-family: monospace;
+    width: 6em;
+}
+
+.wp-widget select.wp-widget-country.blank {
+    display: none;
+}
+
+.wp-widget .wp-widget-country option {
+    font-family: monospace;
+}
+
+.wp-widget input.wp-widget-number {
+    display: inline;
+    width: 12em;
+}
+
+.wp-widget input.wp-widget-number.with-ccode {
+    width: 18em;
+}
+
+/* Safari 3 and Chrome-specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio:0) {
+.wp-widget .form-item {
+    position: relative;
+}
+
+.wp-widget select.wp-widget-country {
+    background: #fff;
+    font-size: 1.2em;
+    height: 1.3em !important;
+    border: 1px solid #ccc;
+    position: relative;
+    top: 3px !important;
+}
+
+#cmemessage-compose-form .wp-widget select.wp-widget-country {
+    top: 0px;
+}
+
+#cmemessage-recipient-fields .method-field .method-mode-fieldset {
+    overflow: hidden !important;
+    margin: 0px 4px 12px 9px !important;
+}
+
+#cmemessage-recipient-fields .method-field .method-mode-fieldset .peer-mode-field,
+#cmemessage-recipient-fields .method-field .method-mode-fieldset .nonpeer-mode-field {
+    float: left !important;
+}
+
+#cmemessage-recipient-fields .method-field .method-mode-fieldset .form-item {
+    float: none !important;
+}
+
+#cmemessage-recipient-fields .method-field .method-mode-fieldset select {
+    margin-bottom: 0px !important;
+}
+
+} /* End of Safari-3-specific CSS */
+
+/* IE6-specific fix. */
+* html .wp-widget select.wp-widget-country {
+    width: 5em;
+}
+

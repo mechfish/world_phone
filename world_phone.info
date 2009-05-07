@@ -1,0 +1,6 @@
+; $Id$
+name = World Phone - CCK 
+description = "Adds a CCK field type for international phone numbers."
+package = CCK
+dependencies = content
+
