@@ -43,32 +43,10 @@
 .wp-widget select.wp-widget-country {
     background: #fff;
     font-size: 1.2em;
-    height: 1.3em !important;
+    height: 1.3em;
     border: 1px solid #ccc;
     position: relative;
-    top: 3px !important;
-}
-
-#cmemessage-compose-form .wp-widget select.wp-widget-country {
-    top: 0px;
-}
-
-#cmemessage-recipient-fields .method-field .method-mode-fieldset {
-    overflow: hidden !important;
-    margin: 0px 4px 12px 9px !important;
-}
-
-#cmemessage-recipient-fields .method-field .method-mode-fieldset .peer-mode-field,
-#cmemessage-recipient-fields .method-field .method-mode-fieldset .nonpeer-mode-field {
-    float: left !important;
-}
-
-#cmemessage-recipient-fields .method-field .method-mode-fieldset .form-item {
-    float: none !important;
-}
-
-#cmemessage-recipient-fields .method-field .method-mode-fieldset select {
-    margin-bottom: 0px !important;
+    top: 3px;
 }
 
 } /* End of Safari-3-specific CSS */
