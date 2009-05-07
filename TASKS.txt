@@ -10,18 +10,12 @@ Things to accomplish before releasing this module:
   behavior of phone fields could just as well use Drupal's hook
   system.
 
-* Remove the function which allows World Phone widgets to be used for
-  text CCK fields. This is confusing, overcomplicated, and quite
-  probably not useful.
-
-* Comment all the code in the main module.
+* One more review of main-module comments.
 
 * Ascertain if we are really using the best possible method for
   theming the World Phone widget. Should we be including the
   Javascript in a different way? Ensure that the themer has many
   options for tinkering with the final display.
 
-* Remove leftover odds and ends of CSS from the CSS file. Do your
-  level best to get rid of the !important flags.
 
 
