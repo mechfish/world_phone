@@ -1,6 +1,11 @@
 // $Id$
 
 $(document).ready(function() {
+  // don't run without jQuery Update installed
+  if (jQuery.fn.jquery === '1.0.4') {
+    return;
+  }
+
   // hide the blank option
   $("select.wp-widget-country option[value='-1']").hide();
 
@@ -49,6 +54,8 @@ $(document).ready(function() {
     });
   }
 
+  // hide the select box when user types a + in front of a phone number
+  // do not do this if jQuery Update is not installed
   $('input.wp-widget-number').keyup(function(e) {
     var had_ccode = $(this).data('had_ccode');
     var has_ccode = /^\s*\+/.test($(this).val());
