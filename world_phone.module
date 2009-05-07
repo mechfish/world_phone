@@ -160,19 +160,19 @@ function world_phone_field($op, &$node, $field, &$items, $teaser, $page) {
 function world_phone_field_formatter_info() {
   return array(
     'default' => array(
-      'label' => 'Phone number, with country code if outside this site\'s home country.',
+      'label' => 'Phone number, w/country code if outside site\'s country.',
       'field types' => array('world_phone', 'text'),
     ),
     'with_country' => array(
-      'label' => 'Phone number, with country code',
+      'label' => 'Phone number w/country code',
       'field types' => array('world_phone', 'text'),
     ),
     'without_country' => array(
-      'label' => 'Phone number, without country code',
+      'label' => 'Phone number without country code',
       'field types' => array('world_phone', 'text'),
     ),
     'dialable' => array(
-      'label' => 'Phone number, in dialable format',
+      'label' => 'Phone number in dialable format',
       'field types' => array('world_phone', 'text'),
     ),
   );
