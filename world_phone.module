@@ -780,14 +780,94 @@ function _world_phone_country_file_invoke($cfile, $hook, $args = array()) {
 }
 
 /**
- * Get information about a country from its country code.
+ * Return TRUE if the given telephone country code is known to correspond to
+ * an actual country, false otherwise.
+ *
+ * @param $ccode
+ *   A string representing a possible telephone country code.
+ * @return
+ *   TRUE if $ccode exists in the database of telephone country codes, FALSE
+ *   otherwise.
  */
+function world_phone_country_code_exists($ccode) {
+  // note the ORDER BY: "us" sorts before "ca"
+  $query = "SELECT 1 " .
+    "FROM {world_phone_countries} " .
+    "WHERE country_code = '%s' ";
+  $result = db_result(db_query($query, $ccode));
+  return ($result !== FALSE);
+}
+
+/**
+ * Given a telephone country code, return the ISO 3166-1-alpha-2 abbreviation
+ * for the corresponding country.
+ *
+ * Note that there is at least one important case (Canada and the USA) where
+ * two countries share the same telephone country code. In this case, this
+ * routine will return 'US'.
+ * 
+ * @param $ccode
+ *   A string representing a telephone country code.
+ * @return
+ *   The ISO 3166-1-alpha-2 abbreviation for the country corresponding to the
+ *   given country code, or NULL if the country code does not correspond to a
+ *   country.
+ */
+function world_phone_country_abbr_from_code($ccode) {
+  // TODO
+}
+
+/**
+ * Given an ISO 3166-1-alpha-2 abbreviation for a country of the world, return
+ * the telephone country code for that country.
+ *
+ * @param $iso
+ *   A string representing the two-character ISO 3166-1-alpha-2 code for a
+ *   country.
+ * @return
+ *   The telephone country code for the given country.
+ */
+function world_phone_country_code_from_abbr($iso) {
+  // TODO
+}
+
+/**
+ * Given an ISO 3166-1-alpha-2 abbreviation for a country, return the short
+ * name of the country.
+ *
+ * @param $iso
+ *   A string representing the two-character ISO 3166-1-alpha-2 code for a
+ *   country.
+ * @return
+ *   The full name of the country.
+ */
+ function world_phone_country_shortname_from_abbr($iso) {
+   // TODO
+ }
+
+/**
+ * Look up information about the country associated with the given telephone
+ * country code.
+ *
+ * The ITU-T E.164 country code system doesn't provide a unique country for
+ * each telephone country code. The most conspicuous example of this is the
+ * USA and Canada, who share the code '1'. For the moment, we elide this
+ * problem in a simple but impolite way by always returning "USA" for code
+ * 1. Mortally offended Canucks with a better idea of how to handle this are
+ * cordially invited to submit patches.
+ * 
+ * @param $ccode
+ *   A telephone country code.
+ * @return
+ *   An array with abbrev, name, and code keys
+ */
+// TODO - remove this function
 function world_phone_country_info($ccode) {
+  // note the ORDER BY: "us" sorts before "ca"
   $query = "SELECT abbrev, name, country_code as code, file " .
     "FROM {world_phone_countries} " .
     "WHERE country_code = '%s' " .
-    "ORDER BY country_weight DESC, abbrev " . 
-    "LIMIT 1";
+    "ORDER BY abbrev DESC LIMIT 1";
   $result = db_fetch_array(db_query($query, $ccode));
   return $result;
 }
@@ -806,18 +886,14 @@ function world_phone_country_info($ccode) {
  *   country name.
  */
 function world_phone_country_list_by_code($theme = '') {
-  $query = "SELECT abbrev, name, country_code as code, file, country_weight " .
+  $query = "SELECT abbrev, name, country_code as code, file " .
     "FROM {world_phone_countries} " .
     "ORDER BY name";
   $result = db_query($query);
   $names = array();
-  $weights = array();
   while ($row = db_fetch_object($result)) {
-    if (! isset($names[$row->code]) ||
-        $row->country_weight > $weights[$row->code]) {
-      unset($names[$row->code]);
+    if (! isset($names[$row->code]))
       $names[$row->code] = empty($theme) ? $row->name : theme($theme, $row->abbrev, $row->name, $row->code);
-      $weights[$row->code] = $row->country_weight;
     }
   }
   return $names;

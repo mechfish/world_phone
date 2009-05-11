@@ -13,8 +13,9 @@
 
 function wp_default_country_code_array() {  
   return array(
-    array('1', 'ca', 'Canada', 1),
-    array('1', 'us', 'United States', 5),
+// Canadians: You're out of luck for now. Please forward complaints to the ITU-T. :)
+//    array('1', 'ca', 'Canada'),
+    array('1', 'us', 'US/Canada'), // should be "United States" once we handle Canada better
     array('1242', 'bs', 'Bahamas'),
     array('1246', 'bb', 'Barbados'),
     array('1264', 'ai', 'Anguilla'),
@@ -33,7 +34,8 @@ function wp_default_country_code_array() {
     array('1767', 'dm', 'Dominica'),
     array('1784', 'vc', 'Saint Vincent and the Grenadines'),
     array('1787', 'pr', 'Puerto Rico'),
-    array('1808', '', 'Midway Island'),
+// Midway has no ISO 3166 code of its own. Risk offending them by leaving them out.
+//    array('1808', '', 'Midway Island'), 
     array('1809', 'do', 'Dominican Republic'),
     array('1829', 'do', 'Dominican Republic'),
     array('1868', 'tt', 'Trinidad and Tobago'),
