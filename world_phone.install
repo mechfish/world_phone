@@ -13,8 +13,8 @@ function world_phone_install() {
  * update 1: delete database tables used by older version of the module.
  */
 function world_phone_update_1() {
-  $result[] = db_query("DROP TABLE {world_phone_countries}");
-  return $result;
+  db_query("DROP TABLE {world_phone_countries}");
+  return array();
 }
 
 /**
