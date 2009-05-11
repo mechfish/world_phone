@@ -52,7 +52,7 @@ function world_phone_admin_settings() {
     '#title' => t('Site\'s Home Country'),
     '#description' => t('This country code will be assigned to all phone numbers which ' . 
                         'do not specify country codes.'),
-    '#options' => world_phone_country_list_by_code('world_phone_option'),
+    '#options' => _world_phone_country_list_for_select(),
     '#default_value' => variable_get('world_phone_default_country_code', '1'),
   );
   $form['site_country']['world_phone_country_policy'] = array(
@@ -374,7 +374,7 @@ function world_phone_number_expand($element) {
     $country_options = $element['#country_options'];
   }
   else {
-    $country_options = array('-1' => '') + world_phone_country_list_by_code('world_phone_short_option');
+    $country_options = array('-1' => '') + _world_phone_country_list_for_select();
   }
   $element['country_code'] = array(
     '#type' => 'select',
@@ -452,7 +452,7 @@ function _world_phone_default_country_for_user($user) {
     elseif ($country_field_type == 'abbrev') {
       $abbrev = $user->$country_field;
       if (! empty($abbrev)) {
-        $ccode = world_phone_country_code_for_abbrev(strtolower($abbrev));
+        $ccode = world_phone_country_code_for_abbrev(strtoupper($abbrev));
         if (! empty($ccode)) {
           return $ccode;
         }
@@ -463,7 +463,16 @@ function _world_phone_default_country_for_user($user) {
 }
 
 /**
+ * Determine if the $num_array represents a valid phone number. If the phone
+ * number includes a country code and country-specific validation routines are
+ * available for that country, those routines will be used for validiation.
  *
+ * @param $num_array
+ *   An array representing a phone number, with these keys:
+ *     - 'value' => the number, as a string
+ *     - 'country_code' => an explicitly specified country code. May be NULL.
+ * @return
+ *   TRUE if $num_array is a valid phone number, FALSE otherwise.
  */
 function _world_phone_number_validate($num_array) {
   $result = array();
@@ -771,51 +780,57 @@ function world_phone_country_invoke() {
   $args = func_get_args();
   $ccode = array_shift($args);
   $hook = array_shift($args);
-  // TODO - phase out the use of this function
-  $info = world_phone_country_info($ccode);
-  if ($info && $info['file']) {
-    return _world_phone_country_file_invoke($info['file'], $hook, $args);
-  }
-  return NULL;
-}
 
-/**
- * Invoke a hook from within a specific country file. $cfile must be the name of a file
- * in this module's /countries directory.
- *
- * A country file's hooks must be defined with a prefix in their names. The
- * country file must have a name equal to the prefix with '.inc' as the
- * suffix. For example, the usa_country_codes() hook must reside in a file
- * called "usa.inc" in the /countries directory.
- *
- * To avoid name collisions it is also suggested that each country file begin
- * with the "wp_" prefix.
- */
-function _world_phone_country_file_invoke($cfile, $hook, $args = array()) {
-  include_once(drupal_get_path('module', 'world_phone') . '/countries/' . $cfile . '.ccs');
-  $func = $cfile . '_' . $hook;
+  // TODO - make the hook mechanism real
+  $func = 'world_phone_default_' . $hook;
   if (function_exists($func)) {
     return call_user_func_array($func, $args);
-  }
+  }  
 }
 
 /**
- * Return TRUE if the given telephone country code is known to correspond to
- * an actual country, false otherwise.
+ * Implementation of hook_format_number().
  *
- * @param $ccode
- *   A string representing a possible telephone country code.
- * @return
- *   TRUE if $ccode exists in the database of telephone country codes, FALSE
- *   otherwise.
+ * Accept a phone number and convert it to a canonical form to display to the
+ * user. The output is checked using check_plain to be sure it is safe to show
+ * the user.
  */
-function world_phone_country_code_exists($ccode) {
-  // note the ORDER BY: "us" sorts before "ca"
-  $query = "SELECT 1 " .
-    "FROM {world_phone_countries} " .
-    "WHERE country_code = '%s' ";
-  $result = db_result(db_query($query, $ccode));
-  return ($result !== FALSE);
+function world_phone_default_format_number($number, $country_code = NULL, $include_country_code = TRUE) {
+  // return a blank value, to force the module to handle this using its default code
+  return '';
+}
+
+/**
+ * Implementation of hook_validate_number()
+ *
+ * Accept a number as entered by the user and return an array of error
+ * messages if that number is not valid. If the number is valid, return an empty array.
+ *
+ * Note that unless it begins with '+' the $number may not contain a country
+ * code -- the user may have specified the country code by some other means.
+ * 
+ **/
+function world_phone_default_validate_number($number, $country_code) {
+  // we allow nothing but numbers, with optional dashes, parens, and spaces and an optional + in front
+  if (! (preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $number))) {
+    return array(t('Phone number contains an invalid character; only digits and + are allowed.'));
+  }
+  return array();
+}
+
+/**
+ * COUNTRY CODES, ABBREVIATIONS, AND NAMES
+ */
+ 
+/**
+ * Return a map of telephone country codes to ISO 3166-1-alpha-2
+ * abbreviations.
+ */
+function world_phone_country_code_to_abbrev_map() {
+  // This just wraps the map from the include file.
+  $path = drupal_get_path('module', 'world_phone');
+  require_once("./$path/country_codes.inc");
+  return _world_phone_country_code_to_abbrev_map();
 }
 
 /**
@@ -833,8 +848,26 @@ function world_phone_country_code_exists($ccode) {
  *   given country code, or NULL if the country code does not correspond to a
  *   country.
  */
-function world_phone_country_abbr_from_code($ccode) {
-  // TODO
+function world_phone_country_abbrev_for_code($ccode) {
+  $map = world_phone_country_code_to_abbrev_map();
+  if (isset($map[$ccode])) {
+    return $map[$ccode];
+  }
+  return NULL;
+}
+
+/**
+ * Return TRUE if the given telephone country code is known to correspond to
+ * an actual country, false otherwise.
+ *
+ * @param $ccode
+ *   A string representing a possible telephone country code.
+ * @return
+ *   TRUE if $ccode exists in the database of telephone country codes, FALSE
+ *   otherwise.
+ */
+function world_phone_country_code_exists($ccode) {
+  return (world_phone_country_abbrev_for_code($ccode) !== NULL) ? TRUE : FALSE;
 }
 
 /**
@@ -847,150 +880,74 @@ function world_phone_country_abbr_from_code($ccode) {
  * @return
  *   The telephone country code for the given country.
  */
-function world_phone_country_code_from_abbr($iso) {
-  // TODO
+function world_phone_country_code_for_abbrev($iso) {
+  static $cached_map;
+  if (! isset($cached_map)) {
+    $cached_map = array_flip(world_phone_country_code_to_abbrev_map());    
+  }
+  if (isset($cached_map[$iso])) {
+    return $cached_map[$iso];
+  }
+  return NULL;
 }
 
-/**
- * Given an ISO 3166-1-alpha-2 abbreviation for a country, return the short
- * name of the country.
- *
- * @param $iso
- *   A string representing the two-character ISO 3166-1-alpha-2 code for a
- *   country.
- * @return
- *   The full name of the country.
- */
- function world_phone_country_shortname_from_abbr($iso) {
-   // TODO
- }
 
 /**
- * Look up information about the country associated with the given telephone
- * country code.
- *
- * The ITU-T E.164 country code system doesn't provide a unique country for
- * each telephone country code. The most conspicuous example of this is the
- * USA and Canada, who share the code '1'. For the moment, we elide this
- * problem in a simple but impolite way by always returning "USA" for code
- * 1. Mortally offended Canucks with a better idea of how to handle this are
- * cordially invited to submit patches.
- * 
- * @param $ccode
- *   A telephone country code.
- * @return
- *   An array with abbrev, name, and code keys
+ * COUNTRY SELECTION WIDGET
  */
-// TODO - remove this function
-function world_phone_country_info($ccode) {
-  // note the ORDER BY: "us" sorts before "ca"
-  $query = "SELECT abbrev, name, country_code as code, file " .
-    "FROM {world_phone_countries} " .
-    "WHERE country_code = '%s' " .
-    "ORDER BY abbrev DESC LIMIT 1";
-  $result = db_fetch_array(db_query($query, $ccode));
-  return $result;
-}
 
 /**
- * Return an array of country names, sorted alphabetically by name, keyed by
- * telephone country code.
- *
- * @param $theme
- *   (Optional) The name of a theme function through which each country name
- *   will be filtered before it is returned. The function must accept three
- *   arguments: country abbreviation, country name, and country code.
- * @return
- *   An array with country codes as keys and country names (after theming, if
- *   $theme was provided) as values. The array is sorted alphabetically by
- *   country name.
+ * Return a list of country names in proper format for a phone widget
+ * dropdown: keyed by telephone country code, sorted alphabetically by name,
+ * and themed with the 'world_phone_country_for_widget' theme.
  */
-function world_phone_country_list_by_code($theme = '') {
-  $query = "SELECT abbrev, name, country_code as code, file " .
-    "FROM {world_phone_countries} " .
-    "ORDER BY name";
-  $result = db_query($query);
-  $names = array();
-  while ($row = db_fetch_object($result)) {
-    if (! isset($names[$row->code])) {
-      $names[$row->code] = empty($theme) ? $row->name : theme($theme, $row->abbrev, $row->name, $row->code);
+function _world_phone_country_list_for_select() {
+  if ($names = cache_get('world_phone_country_list_for_select')) {
+    return unserialize($names->data);
+  }
+  $path = drupal_get_path('module', 'world_phone');
+  require_once("./$path/country_short_names.inc");
+  $shortnames = _world_phone_country_abbrev_to_shortname_map();
+  
+  // for each country code, format a menu item for the corresponding country
+  $ccodes = world_phone_country_code_to_abbrev_map();
+  $by_name = array();
+  foreach ($ccodes as $country_code => $abbrev) {
+    if (isset($shortnames[$abbrev])) {
+      $shortname = $shortnames[$abbrev];
+      if (! isset($by_name[$shortname])) {
+        $by_name[$shortname] = array(
+          $country_code,
+          theme('world_phone_country_for_widget', $abbrev, $shortname, $country_code),
+        );
+      }
     }
   }
+  // sort entries by name
+  ksort($by_name);
+  // reformat the entries so they are keyed by country code
+  $names = array();
+  foreach ($by_name as $name_info) {
+    $names[$name_info[0]] = $name_info[1];
+  }
+  cache_set('world_phone_country_list_for_select', 'cache', serialize($names));
   return $names;
 }
 
 /**
- * Return the country code that corresponds to the given country abbreviation.
- *
- * @param $abbrev
- *   An ISO 3166 two-letter country abbreviation.
- * @return
- *   A telephone country code.
- */
-function world_phone_country_code_for_abbrev($abbrev) {
-  if (! empty($abbrev)) {
-    $query = "SELECT country_code FROM {world_phone_countries} WHERE abbrev = '%s'";
-    return db_result(db_query_range($query, $abbrev, 0, 1));
-  }
-}
-
-/**
- * Rebuild the table of countries in the database by reading the country definition
- *  files from our countries directory.
- */
-function world_phone_rebuild_country_table() {
-  // clear the existing table
-  db_query("DELETE FROM {world_phone_countries}");
-
-  $cdir = drupal_get_path('module', 'world_phone') . '/countries';
-  $files = file_scan_directory($cdir, '\.ccs$', array('.', '..', 'CVS'), 0, FALSE, 'name');
-  $query = "INSERT INTO {world_phone_countries} (country_code, abbrev, name, country_weight, file) VALUES ('%s', '%s', '%s', %d, '%s')";
-  foreach (array_keys($files) as $f) {
-    $raw_info = _world_phone_country_file_invoke($f, 'country_codes');
-    foreach ($raw_info as $c) {
-      db_query($query, $c[0], $c[1], $c[2], isset($c[3]) ? $c[3] : 0, $f);
-    }
-  }
-}
-
-/**
- * Helper function for sorting cache array by name.
- */
-function _world_phone_sort_cachearray_by_name($a, $b) {
-  return strcmp($a[1], $b[1]);
-}
-
-/**
- * Format a single country's row for the  options list that is used to select countries for a phone number.
+ * Format a row for the options list that is used to select countries for a
+ * phone number.
  *
  * @param $abbrev
  *   The country's ISO 3166 two-letter country abbreviation.
  * @param $name
- *   The country's full name.
+ *   The country's short name.
  * @param $code
  *   The country's telephone country code.
  *
  * @ingroup themeable
  */
-function theme_world_phone_option($abbrev, $name, $code) {
-  return $name . ' +' . $code;
-}
-
-/**
- * Format a row for an options list that is used to select countries for a
- * phone number. The row is kept short by abbreviating the country name if
- * needed.
- *
- * @param $abbrev
- *   The country's ISO 3166 two-letter country abbreviation.
- * @param $name
- *   The country's full name.
- * @param $code
- *   The country's telephone country code.
- *
- * @ingroup themeable
- */
-function theme_world_phone_short_option($abbrev, $name, $code) {  
+function theme_world_phone_country_for_widget($abbrev, $name, $code) {  
   return str_repeat('&nbsp', 4 - strlen($code)) . '+' . $code . '&nbsp;&nbsp;' . $name;
 }
 

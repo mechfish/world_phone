@@ -5,44 +5,20 @@
  * Implementation of hook_install().
  */
 function world_phone_install() {
-  switch ($GLOBALS['db_type']) {
-    case 'mysql':
-    case 'mysqli':
-      db_query("CREATE TABLE {world_phone_countries} (
-          abbrev varchar(5),
-          country_code varchar(10),
-          name varchar(255) NOT NULL,
-          file varchar(255),
-          country_weight int NOT NULL default '0',
-          INDEX(abbrev),
-          INDEX(country_code)
-        ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-      break;
-
-    case 'pgsql':
-      db_query("CREATE TABLE {world_phone_countries} (
-          abbrev varchar(5),
-          country_code varchar(10),
-          name varchar(255) NOT NULL,
-          file varchar(255),
-          country_weight int NOT NULL default '0'
-        )");
-      db_query("CREATE INDEX {world_phone_countries}_abbrev_idx ON {world_phone_countries} (abbrev)");
-      db_query("CREATE INDEX {world_phone_countries}_country_code_idx ON {world_phone_countries} (country_code)");
-      break;
-  }
 }
 
 /**
- *  Implementation of hook_enable().
+ * Implementation of hook_update().
+ *
+ * update 1: delete database tables used by older version of the module.
  */
-function world_phone_enable() {
-  world_phone_rebuild_country_table();
+function world_phone_update_1() {
+  $result[] = db_query("DROP TABLE {world_phone_countries}");
+  return $result;
 }
 
 /**
  *  Implementation of hook_uninstall().
  */
 function world_phone_uninstall() {
-  db_query("DROP TABLE {world_phone_countries}");
 }
