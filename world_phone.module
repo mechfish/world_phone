@@ -627,11 +627,11 @@ function world_phone_country_code_from_number($number, $require_prefix = TRUE) {
   $maxlen = (strlen($n) >= 3) ? 3 : strlen($n);
   for ($len = 1; $len <= $maxlen; $len++) {
     $ccode = substr($n, 0, $len);
-    if (world_phone_country_info($ccode) || $len == 3) {
+    if (world_phone_country_code_exists($ccode) || $len == 3) {
       if ($ccode == '1') {
         // code 1 is special: it might be the start of a four-digit code
         $long_ccode = substr($n, 0, 4);
-        if (world_phone_country_info($long_ccode)) {
+        if (world_phone_country_code_exists($long_ccode)) {
           return $long_ccode;
         }
       }
@@ -711,16 +711,16 @@ function _world_phone_determine_country_code($number, $country_code = NULL) {
  *    The country code to add to the $number. If the $number already begins
  *    with + and includes a country code, this argument will be ignored.
  *
- * @param $from_country
- *   Optional: the country code of the country that we are dialing out
- *   from. If this is not provided or is NULL, no dial-out prefix will be
+ * @param $from_country 
+ *   Optional: the telephone country code of the country that we are dialing
+ *   out from. If this is not provided or is NULL, no dial-out prefix will be
  *   added; otherwise the module will attempt to add the appropriate
  *   international dial-out prefix to the number. (By default, this will be
  *   00, which is according to ITU standards. But there are many
  *   country-by-country exceptions; see
- *   http://en.wikipedia.org/wiki/List_of_international_call_prefixes . If this
- *   function does not work for your specific country you may need to write a hook.)
- *   TODO: better documentation of this hook name
+ *   http://en.wikipedia.org/wiki/List_of_international_call_prefixes . If
+ *   this function does not work for your specific country you may need to
+ *   write a hook.)  TODO: better documentation of this hook name
  *
  * @param $addl_args
  *   Optional: An array of additional arguments to pass to the
@@ -742,16 +742,36 @@ function world_phone_number_to_dial($number, $country_code = NULL, $from_country
 }
 
 /*
- * Country hooks. 
+ * HOOK MECHANISM
+ *
+ * A pluggable infrastructure that allows other modules to define how a
+ * specific country's phone numbers are handled: How they are formatted, how
+ * to validate them, and how to dial out internationally from that country's
+ * phones.
+ *
+ * This module defines default behavior for most countries, and may eventually
+ * come to define more specialized behaviors for certain popular countries, but
+ * anyone whose needs are not met by this module can implement some hooks to
+ * add their own desired behaviors.
+ * Third-party modules can define how a country's phone numbers should be
+ * handled by implementing one or more world_phone hooks, and then registering
+ * to handle a particular country by implementing hook_world_phone_countries().
  */
 
 /**
- * Invoke one of a country's hooks.
+ * Invoke a hook that's associated with a given country.
+ *
+ * @param $country_code
+ *   The telephone country code
+ * @param $hook
+ *   The name of the hook to invoke.
+ * @param ...Arguments to pass to the hook
  */
 function world_phone_country_invoke() {
   $args = func_get_args();
   $ccode = array_shift($args);
   $hook = array_shift($args);
+  // TODO - phase out the use of this function
   $info = world_phone_country_info($ccode);
   if ($info && $info['file']) {
     return _world_phone_country_file_invoke($info['file'], $hook, $args);
