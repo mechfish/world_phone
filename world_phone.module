@@ -912,7 +912,7 @@ function world_phone_country_list_by_code($theme = '') {
   $result = db_query($query);
   $names = array();
   while ($row = db_fetch_object($result)) {
-    if (! isset($names[$row->code]))
+    if (! isset($names[$row->code])) {
       $names[$row->code] = empty($theme) ? $row->name : theme($theme, $row->abbrev, $row->name, $row->code);
     }
   }
