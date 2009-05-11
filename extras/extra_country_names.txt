@@ -1,5 +1,8 @@
 Entities which have ISO 3166-1 codes but no phone country codes.
-This list is provided in case someone wants to construct a complete list of ISO 3166-1 codes from this module's data.
+
+This list was compiled during the process of keying in the relevant
+ISO 3166-1 and ITU-T E.164 standards. It is provided for future
+reference.
 
 'ap', 'African Regional Industrial Property Organization'
 'aq', 'Antarctica'
