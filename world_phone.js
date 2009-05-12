@@ -70,7 +70,7 @@ $(document).ready(function() {
       else {
         var old_val = $(this).data('old_selected_values');
         if (old_val == '-1') {
-          old_val = Drupal.settings.world_phone_default_country_code;
+          old_val = Drupal.settings.world_phone_default_country;
         }
         $(this).removeClass('with-ccode');
         $(cwidget).selectOptions(old_val, true).removeClass('blank');

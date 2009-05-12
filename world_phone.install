@@ -18,6 +18,142 @@ function world_phone_update_1() {
 }
 
 /**
+ * Implementation of hook_update().
+ *
+ * update 2: Alter the contents of the various country_code columns to contain
+ * ISO 3166-1a2 two-letter codes instead of telephone country codes. This is a
+ * better solution for the dreaded 'Canada vs USA' problem (the two countries
+ * share the same telephone code but have different ISO 3166-1a2 codes) and
+ * will make it easier to recognize which country a phone number in the
+ * database is from.
+ *
+ * Also, rename "country_code" and "value" elements of the world_phone field
+ * to "country" and "number".
+ */
+function world_phone_update_2() {  
+  // find all known instances of the world_phone field
+  $result = db_query("SELECT field_name, multiple FROM {node_field} WHERE type = '%s'", 'world_phone');
+  $fields = array();
+  while ($field = db_fetch_object($result)) {
+    $fields[] = $field;
+  }
+  $to_update = array();
+  $to_rename = array();  
+  foreach ($fields as $field) {
+    if ($field->multiple) {
+      $t = 'content_' . $field->field_name;
+      $column_name = $field->field_name . '_country_code';
+      if (_world_phone_db_column_exists($t, $column_name)) {
+        $to_rename[] = array(
+          'table' => $t,
+          'field' => $field->field_name,
+        );
+      } else {
+        $column_name = $field->field_name . '_country';
+      }
+      $to_update[] = array(
+        'table' => $t,
+        'multiple' => TRUE,
+        'column' => $column_name,
+      );
+    }
+    else {
+      $result = db_query("SELECT type_name FROM {node_field_instance} WHERE field_name = '%s'", $field->field_name);
+      while ($instance = db_fetch_object($result)) {
+        $t = 'content_type_' . $instance->type_name;
+        $column_name = $field->field_name . '_country_code';
+        if (_world_phone_db_column_exists($t, $column_name)) {
+          $to_rename[] = array(
+            'table' => $t,
+            'field' => $field->field_name,
+          );
+        } else {
+          $column_name = $field->field_name . '_country';
+        }
+        $to_update[] = array(
+          'table' => $t,
+          'multiple' => FALSE,
+          'column' => $column_name,
+        );
+      }
+    }    
+  }
+  foreach ($to_update as $update) {
+    _world_phone_update_country_column_data($update['table'], $update['column'], $update['multiple']);    
+  }
+
+  // change the names of the columns in the CCK tables
+  foreach ($to_rename as $tr) {
+    _world_phone_rename_phone_cck_columns($tr['table'], $tr['field']);
+  }
+
+  // update the variables table
+  $site_ccode = variable_get('world_phone_default_country_code', '1');
+  $site_country = world_phone_country_from_country_code($site_ccode);
+  variable_set('world_phone_default_country', $site_country);
+  variable_del('world_phone_default_country_code');
+
+  return array();
+}
+
+/**
+ * A helper function -- adjust the contents of a country column to contain
+ * two-letter codes instead of telephone country codes.
+ */
+function _world_phone_update_country_column_data($table, $column, $multiple) {
+  drupal_set_message("Updating country column data for table $table, column $column");
+  if ($multiple) {
+    $result = db_query("SELECT vid, nid, delta, %s AS code FROM {%s} WHERE %s IS NOT NULL", $column, $table, $column);  
+  }
+  else {
+    $result = db_query("SELECT vid, nid, %s AS code FROM {%s} WHERE %s IS NOT NULL", $column, $table, $column);
+  }
+  $update_queries = array();
+  while ($entry = db_fetch_object($result)) {
+    if (preg_match('/^\d+$/', $entry->code)) {
+      $new_code = world_phone_country_from_country_code($entry->code);
+      $update_query = "UPDATE {%s} SET %s = '%s' WHERE vid = %d AND nid = %d";
+      $update_args = array($table, $column, $new_code, $entry->vid, $entry->nid);
+      if ($multiple) {
+        $update_query .= " AND delta = %d";
+        $update_args[] = $entry->delta;
+      }
+      $update_queries[] = array_merge(array($update_query), $update_args);
+    }
+  }
+  foreach ($update_queries as $q) {
+    call_user_func_array('db_query', $q);
+  }
+}
+
+/**
+ * A helper function -- rename the columns for phone field $field_name in table $table
+ */
+function _world_phone_rename_phone_cck_columns($table, $field_name) {
+  drupal_set_message("Renaming columns for $field_name in table $table");
+  require_once("./" . drupal_get_path('module', 'content') . "/content_admin.inc");
+  content_db_change_column(db_escape_table($table), $field_name . '_country_code', $field_name . '_country', 'varchar', 
+                           array('length' => 8));
+  content_db_change_column(db_escape_table($table), $field_name . '_value', $field_name . '_number', 'varchar', 
+                           array('length' => WORLD_PHONE_MAXLENGTH, 'not null' => TRUE));
+}
+
+/**
+ * A helper function -- return TRUE if the given database $column exists in $table.
+ * Ported from Drupal 6.
+ */
+function _world_phone_db_column_exists($table, $column) {
+  switch($GLOBALS['db_type']) {
+    case 'pgsql':
+      return (bool) db_result(db_query("SELECT COUNT(pg_attribute.attname) FROM pg_class, pg_attribute WHERE pg_attribute.attrelid = pg_class.oid AND pg_class.relname = '{". db_escape_table($table) ."}' AND attname = '". db_escape_table($column) ."'"));
+      break;
+    case 'mysql':
+      return (bool) db_fetch_object(db_query("SHOW COLUMNS FROM {". db_escape_table($table) ."} LIKE '". db_escape_table($column) ."'"));
+      break;
+  }  
+}
+
+/**
  *  Implementation of hook_uninstall().
  */
 function world_phone_uninstall() {

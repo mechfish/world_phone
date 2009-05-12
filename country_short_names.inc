@@ -21,7 +21,7 @@
  * characters in "Cote D'Ivoire" and "Reunion" have been modified in this
  * file; hence, their spellings are incorrect.
  */
-function _world_phone_country_abbrev_to_shortname_map() {
+function _world_phone_country_to_shortname_map() {
   return array(
     'CA' => t('Canada'),
     'US' => t('USA/Canada'), // should be "United States" once we handle Canada better

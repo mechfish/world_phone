@@ -6,6 +6,8 @@
  * Defines international phone number fields for CCK.
  */
 
+require_once("./" . drupal_get_path('module', 'world_phone') . "/world_phone_number.inc");
+
 // longest allowed length for a user-entered phone number
 define('WORLD_PHONE_MAXLENGTH', 64);
 
@@ -47,20 +49,20 @@ function world_phone_admin_settings() {
                           'This will make it easier for a user to enter domestic phone numbers.'),
     ),
   );
-  $form['site_country']['world_phone_default_country_code'] = array(
+  $form['site_country']['world_phone_default_country'] = array(
     '#type' => 'select',
     '#title' => t('Site\'s Home Country'),
-    '#description' => t('This country code will be assigned to all phone numbers which ' . 
-                        'do not specify country codes.'),
+    '#description' => t('This country will be assigned to all phone numbers which ' . 
+                        'do not specify a country.'),
     '#options' => _world_phone_country_list_for_select(),
-    '#default_value' => variable_get('world_phone_default_country_code', '1'),
+    '#default_value' => variable_get('world_phone_default_country', 'US'),
   );
   $form['site_country']['world_phone_country_policy'] = array(
     '#type' => 'radios',
-    '#title' => t('Country Code Policy'),
+    '#title' => t('Default Country Policy'),
     '#options' => array(
-      'use_site_default' => t('Assume that numbers entered without a country code are in this site\'s home country.'),
-      'require' => t('Users must explicitly select a country code for every number they enter.'),
+      'use_site_default' => t('Assume that numbers entered without a specified country are in this site\'s home country.'),
+      'require' => t('Users must explicitly select a country for every number they enter.'),
     ),
     '#default_value' => variable_get('world_phone_country_policy', 'use_site_default'),
   );
@@ -69,14 +71,16 @@ function world_phone_admin_settings() {
   if (module_exists('profile')) {
     $result = db_query("SELECT title, name, type, category, fid FROM {profile_fields} WHERE type = 'textfield' ORDER BY title");    
     while ($field = db_fetch_object($result)) {
-      $profile_fields[$field->name] = check_plain($field->title);
+      $profile_fields[check_plain($field->name)] = check_plain($field->title);
     }
   }
   $profile_fields = array('-1' => t('User cannot specify a default country.')) + $profile_fields;
   $form['user_country']['world_phone_user_country_field'] = array(
     '#type' => 'select',
-    '#title' => t('Country Profile Field'),
-    '#description' => t('Use this field from a user\'s profile to determine the user\'s home country.'),
+    '#title' => t('User Profile Country Field'),
+    '#description' => t('If you are storing each user\'s home country in their profile, you can use this information to ' .
+                        'determine the default country for phone numbers entered by that user. To do so, select the profile field which ' .
+                        'which contains country information.'),
     '#options' => $profile_fields,
     '#default_value' => variable_get('world_phone_user_country_field', '-1'),
   );
@@ -85,12 +89,12 @@ function world_phone_admin_settings() {
   }
   $form['user_country']['world_phone_user_country_field_type'] = array(
     '#type' => 'radios',
-    '#title' => t('Country Profile Field Type'),
+    '#title' => t('User Profile Country Field -- Type'),
     '#options' => array(
       'phone' => t('A phone number with country code prefix, stored as text'),
       'abbrev' => t('A standard two-letter abbreviation for a country (ISO 3166-1 alpha-2)'),
     ),
-    '#description' => t('How shall this module interpret the contents of the Country Profile Field?'),
+    '#description' => t('How shall this module interpret the contents of the User Profile Country Field?'),
     '#default_value' => variable_get('world_phone_user_country_field_type', 'phone'),
   );
   return system_settings_form($form);
@@ -127,8 +131,8 @@ function world_phone_field_settings($op, $field) {
   switch ($op) { 
     case 'database columns':
       return array(
-        'country_code' => array('type' => 'varchar', 'length' => 8, 'default' => "''", 'sortable' => TRUE),
-        'value' => array('type' => 'varchar', 'length' => WORLD_PHONE_MAXLENGTH, 'not null' => TRUE, 'default' => "''", 'sortable' => TRUE),
+        'country' => array('type' => 'varchar', 'length' => 8, 'default' => "''", 'sortable' => TRUE),
+        'number' => array('type' => 'varchar', 'length' => WORLD_PHONE_MAXLENGTH, 'not null' => TRUE, 'default' => "''", 'sortable' => TRUE),
       );
       
     case 'filters':
@@ -148,8 +152,10 @@ function world_phone_field($op, &$node, $field, &$items, $teaser, $page) {
 
     case 'submit':
       foreach ($items as $delta => $item) {
-        $ccode = _world_phone_determine_country_code($item['value'], $item['country_code']);
-        $items[$delta]['country_code'] = $ccode['value'];
+        // put the number into a consistent format, while extracting its country
+        $num = WorldPhoneNumber::create($item['number'], $item['country']);
+        $items[$delta]['number'] = $num->get_number();
+        $items[$delta]['country'] = $num->get_country();
       }
       break;
   }
@@ -187,7 +193,7 @@ define('WORLD_PHONE_FORMAT_WITH_COUNTRY', 2);
  * Implementation of hook_field_formatter().
  */
 function world_phone_field_formatter($field, $item, $formatter, $node) {
-  if (!isset($item['value'])) {
+  if (! isset($item['number'])) {
     return '';
   }
   $fmt = WORLD_PHONE_FORMAT_FOREIGN_COUNTRY_ONLY;
@@ -199,13 +205,14 @@ function world_phone_field_formatter($field, $item, $formatter, $node) {
       $fmt = WORLD_PHONE_FORMAT_WITHOUT_COUNTRY;
       break;
     case 'dialable':
-      $formatted = world_phone_number_to_dial($item['value'], $item['country_code']);
-      return theme('world_phone_dialable', check_plain($formatted), check_plain($item['value']), check_plain($item['country_code']));
+      // TODO: work out semantics for determining the origin country of a dialed number
+      $formatted = world_phone_number_to_dial($item['number'], $item['country']);
+      return theme('world_phone_dialable', check_plain($formatted), check_plain($item['number']), check_plain($item['country']));
     default:
       break;
   }
-  $formatted = world_phone_format_number($item['value'], $item['country_code'], $fmt);
-  return theme('world_phone', $formatted, check_plain($item['value']), check_plain($item['country_code']));
+  $formatted = world_phone_format_number($item['number'], $item['country'], $fmt);
+  return theme('world_phone', $formatted, check_plain($item['number']), check_plain($item['country']));
 }
 
 /**
@@ -256,7 +263,7 @@ function world_phone_widget($op, &$node, $field, &$items) {
         }
         $items['default phones'] = $arr;
       }
-      elseif (isset($items[0]['value'])) {
+      elseif (isset($items[0]['number'])) {
         $items['default phone'] = _world_phone_prepare_for_widget($field, $items[0]);
       }
       break;
@@ -296,7 +303,7 @@ function world_phone_widget($op, &$node, $field, &$items) {
     case 'process form values':
       // remove any empty form items beyond the first
       foreach ($items as $delta => $item) {
-        if ($item['value'] == '' && $delta > 0)  {
+        if ($item['number'] == '' && $delta > 0)  {
           unset($items[$delta]);
         }
       }      
@@ -315,12 +322,11 @@ function world_phone_widget($op, &$node, $field, &$items) {
  * from the text of the number.
  */
 function _world_phone_prepare_for_widget($field, $data) {
-  $num = $data['value'];
-  $ccode = _world_phone_determine_country_code($data['value'], $data['country_code']);
-  $num = _world_phone_number_remove_country_code($num);
+  // put the number into a consistent format, while extracting its country
+  $num = WorldPhoneNumber::create($data['number'], $data['country']);
   return array(
-    'country_code' => $ccode['value'],
-    'value' => $num,
+    'country' => $num->get_country(),
+    'number' => $num->get_number(),
   );
 }
 
@@ -335,8 +341,8 @@ function _world_phone_widget_item_form($field, $phone, $title = NULL, $required 
     '#title' => (is_null($title)) ? t($field['widget']['label']) : $title,
     '#weight' => $field['widget']['weight'],
     '#default_value' => isset($phone) ? $phone : array(
-      'country_code' => _world_phone_default_country_for_user($user),
-      'value' => '',
+      'country' => _world_phone_default_country_for_user($user),
+      'number' => '',
     ),
     '#size' => isset($field['widget']['size']) ? $field['widget']['size'] : 20,
     '#required' => is_null($required) ? $field['required'] : $required,
@@ -349,7 +355,7 @@ function _world_phone_widget_item_form($field, $phone, $title = NULL, $required 
  * Define a custom form element for world phone numbers: world_phone_number
  *
  * A user may add this element to any form. It accepts a #default_value (and
- * returns a value) which is an array with "country_code" and "value"
+ * returns a value) which is an array with "country" and "value"
  * elements.  It may also be given #title, #size, #required, and
  * #country_options values (#country_options is a list of countries to provide
  * in the country-code dropdown)
@@ -364,8 +370,8 @@ function world_phone_elements() {
     '#process' => array('world_phone_number_expand' => array()),
     '#validate' => array('world_phone_number_validate' => array()),
     '#default_value' => array(
-      'country_code' => variable_get('world_phone_default_country_code', '1'),
-      'value' => '',
+      'country' => variable_get('world_phone_default_country', 'US'),
+      'number' => '',
     ),
   );
   return $type;
@@ -373,7 +379,7 @@ function world_phone_elements() {
 
 /**
  * Accept a world_phone_number form element and install two child elements in
- * the form: 'country_code' (a select menu) and 'value' (a textfield').
+ * the form: 'country' (a select menu) and 'number' (a textfield').
  *
  * This is a #process handler for world_phone_number form elements.
  */
@@ -382,8 +388,8 @@ function world_phone_number_expand($element) {
   $element['#tree'] = TRUE;
   if (! isset($element['#value'])) {
     $element['#value'] = array(
-      'country_code' => $element['#default_value']['country_code'],
-      'value' => $element['#default_value']['value'],
+      'country' => $element['#default_value']['country'],
+      'number' => $element['#default_value']['number'],
     );
   }
   if (isset($element['#country_options'])) {
@@ -392,16 +398,16 @@ function world_phone_number_expand($element) {
   else {
     $country_options = array('-1' => '') + _world_phone_country_list_for_select();
   }
-  $element['country_code'] = array(
+  $element['country'] = array(
     '#type' => 'select',
-    '#value' => $element['#value']['country_code'],
+    '#value' => $element['#value']['country'],
     '#options' => $country_options,
     '#attributes' => array('class' => 'wp-widget-country'),
     '#theme' => 'world_phone_country_select',
   );
-  $element['value'] = array(
+  $element['number'] = array(
     '#type' => 'textfield',
-    '#default_value' => $element['#value']['value'],
+    '#default_value' => $element['#value']['number'],
     '#required' => isset($element['#required']) ? $element['#required'] : FALSE,
     '#maxlength' => WORLD_PHONE_MAXLENGTH,
     '#size' => isset($element['#size']) ? $element['#size'] : 20,
@@ -414,7 +420,7 @@ function world_phone_number_expand($element) {
  * Validate a world_phone_number form element after submission.
  **/
 function world_phone_number_validate($element) {
-  if (! empty($element['#value']['value'])) {
+  if (! empty($element['#value']['number'])) {
     $validation = _world_phone_number_validate($element['#value']);
     foreach ($validation as $msg) {
       form_set_error(implode('][', $element['#parents']), $msg);
@@ -434,8 +440,8 @@ function theme_world_phone_number($element) {
     drupal_add_js(drupal_get_path('module', 'world_phone') . '/jquery.selectboxes.pack.js');
     drupal_add_js(drupal_get_path('module', 'world_phone') . '/world_phone.js');
   }
-  $default_ccode = variable_get('world_phone_default_country_code', '1');
-  drupal_add_js(array('world_phone_default_country_code' => $default_ccode), 'setting');
+  $default_ccode = variable_get('world_phone_default_country', 'US');
+  drupal_add_js(array('world_phone_default_country' => $default_ccode), 'setting');
 
   $o = '<div class="wp-widget">';
   $required = !empty($element['#required']) ? '<span class="form-required" title="'. t('This field is required.') .'">*</span>' : '';
@@ -459,52 +465,49 @@ function _world_phone_default_country_for_user($user) {
   $country_field = variable_get('world_phone_user_country_field', NULL);
   $country_field_type = variable_get('world_phone_user_country_field_type', NULL);
   if ($country_field && $country_field_type && $country_field != '-1') {
-    if ($country_field_type == 'phone') {
-      $ccode = world_phone_country_code_from_number($user->$country_field);
-      if (! empty($ccode)) {
-        return $ccode;
-      }
-    }
-    elseif ($country_field_type == 'abbrev') {
-      $abbrev = $user->$country_field;
-      if (! empty($abbrev)) {
-        $ccode = world_phone_country_code_for_abbrev(strtoupper($abbrev));
-        if (! empty($ccode)) {
-          return $ccode;
+    switch($country_field_type) {
+      case 'phone':
+        $num = WorldPhoneNumber::create($user->$country_field);
+        return $num->get_country();
+        break;
+      case 'abbrev':
+        $abbrev = $user->$country_field;
+        if (! empty($abbrev)) {
+          return $abbrev;
         }
-      }
+        break;
     }
   }
-  return variable_get('world_phone_default_country_code', '1');
+  return variable_get('world_phone_default_country', 'US');
 }
 
 /**
  * Determine if the $num_array represents a valid phone number. If the phone
- * number includes a country code and country-specific validation routines are
+ * number includes a country specification and country-specific validation routines are
  * available for that country, those routines will be used for validiation.
  *
  * @param $num_array
  *   An array representing a phone number, with these keys:
- *     - 'value' => the number, as a string
- *     - 'country_code' => an explicitly specified country code. May be NULL.
+ *     - 'number' => the number, as a string
+ *     - 'country' => an explicitly specified two-letter country abbreviation. May be NULL.
  * @return
  *   TRUE if $num_array is a valid phone number, FALSE otherwise.
  */
 function _world_phone_number_validate($num_array) {
   $result = array();
-  $ccode = _world_phone_determine_country_code($num_array['value'], $num_array['country_code']);
+  $num = WorldPhoneNumber::create($num_array['number'], $num_array['country']);
   $policy = variable_get('world_phone_country_policy', 'use_site_default');
-  if ($ccode['source'] == 'conflict') {
+  if ($num->country_source() == 'conflict') {
     $result[] = t('The phone number begins with a country code that disagrees with that selected in the pulldown menu.');
   }
-  if ($ccode['source'] == 'default' && $policy == 'require') {
+  if ($num->country_source() == 'default' && $policy == 'require') {
     $result[] = t('You must enter a country code for this phone number');
   }
-  $hook_result = world_phone_country_invoke($ccode['value'], 'validate_number', $num_array['value'], $ccode['value']);
+  $hook_result = world_phone_country_invoke($num->get_country(), 'validate_number', $num->get_number(), $num->get_country());
   if (! is_array($hook_result)) {
     // the country invocation failed for some reason.
     // we allow nothing but numbers, with optional dashes, parens, and spaces and an optional + in front
-    if (! (preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $num_array['value']))) {
+    if (! (preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $num->get_number()))) {
       $result[] = t('Phone number contains an invalid character; ' .
                     'only digits, spaces, parentheses, dashes, and + are allowed.');
     }
@@ -518,199 +521,35 @@ function _world_phone_number_validate($num_array) {
  * user. The output is checked using check_plain to be sure it is safe to show
  * the user.
  */
-function world_phone_format_number($number, $country_code = NULL, $include_country_code = WORLD_PHONE_FORMAT_FOREIGN_COUNTRY_ONLY) {
-  $ccode = _world_phone_determine_country_code($number, $country_code);
-  $fmt_number = world_phone_country_invoke($ccode['value'], 'format_number', 
-                                           $number, $ccode['value'], $include_country_code);
+function world_phone_format_number($number, $country = NULL, $include_country_code = WORLD_PHONE_FORMAT_FOREIGN_COUNTRY_ONLY) {
+  $num = WorldPhoneNumber::create($number, $country);
+  $fmt_number = world_phone_country_invoke($num->get_country(), 'format_number', 
+                                           $num->get_number(), $num->get_country(), $include_country_code);
   if (! empty($fmt_number)) {
     return $fmt_number;
   }
   // the hook invocation failed, so handle this ourselves
-  $fmt_number = $number;
-  $src = $ccode['source'];
+  $src = $num->country_source();
   switch ($include_country_code) {
     case WORLD_PHONE_FORMAT_WITH_COUNTRY:
-      if ($src == 'default' || $src == 'country_code') {
-        // add ccode to number
-        $fmt_number = _world_phone_number_add_country_code($number, $ccode['value']);
-      }
+      return check_plain($num->get_number_with_country_code());
       break;
     case WORLD_PHONE_FORMAT_WITHOUT_COUNTRY:
-      if ($src == 'number' || $src == 'conflict' || $src == 'redundant') {
-        // remove ccode from number
-        $fmt_number = _world_phone_number_remove_country_code($number);
-      }
+      return check_plain($num->get_number());
       break;
     default:
-      $default_ccode = variable_get('world_phone_default_country_code', '1');
-      if ($default_ccode == $ccode['value']) {
-        $fmt_number = _world_phone_number_remove_country_code($number);
+      $default_country = variable_get('world_phone_default_country', 'US');
+      if ($default_country == $num->get_country()) {
+        return check_plain($num->get_number());
       }
       else {
-        $fmt_number = _world_phone_number_add_country_code($number, $ccode['value']);
+        return check_plain($num->get_number_with_country_code());
       }
       break;
   }
   return check_plain($fmt_number);
 }
 
-/**
- * Return TRUE if the given phone number begins with a '+', indicating that it
- * includes a country code.
- */
-function _world_phone_number_has_intl_prefix($number) {
-  return preg_match('/^\s*\+/', $number);
-}
-
-/**
- * Add the given $country_code to the front of the given $number string and return the resulting
- * string. If the number already has a country code, or $country_code is empty, return the number
- * without altering it.
- */
-function _world_phone_number_add_country_code($number, $country_code) {
-  if (_world_phone_number_has_intl_prefix($number) || empty($country_code) || empty($number)) {
-    return $number;
-  }
-  return '+' . $country_code . ' ' . $number;
-}
-
-/**
- * Split the given string into 'country_code' and 'value' portions.  'value'
- * is what is left after the country code is removed. If no country code is
- * present in the string, country_code will be NULL. If no value is present,
- * value will be the empty string.
- */
-// TODO: make this the primary function and make the others depend on it
-function world_phone_parse_number_text($number) {
-  return array(
-    'country_code' => world_phone_country_code_from_number($number),
-    'value' => _world_phone_number_remove_country_code($number),
-  );
-}
-
-/**
- * Remove the country code from the start of the given $number and return the trimmed number.
- */
-// TODO - rewrite this and the following function as cases of world_phone_parse_number_text
-function _world_phone_number_remove_country_code($number) {
-  if (! _world_phone_number_has_intl_prefix($number)) {
-    return $number;
-  }
-  $ccode = world_phone_country_code_from_number($number);
-  // remove digits from start of number until we've removed the whole country code
-  $digits_removed = 0;
-  for ($i = 0; $i < strlen($number); $i++) {
-    $chr = substr($number, $i, 1);
-    if (preg_match('/[0-9]/', $chr)) {
-      $digits_removed++;
-    }
-    if ($digits_removed >= strlen($ccode)) {
-      $trimmed = substr($number, $i + 1, strlen($number) - $i);
-      // strip leading and trailing dashes, spaces, etc.
-      $trimmed = trim($trimmed, ' -');
-      return $trimmed;
-    }
-  }
-  // we removed the whole number while trying to remove the country code.
-  return '';
-}
-
-/**
- * Parse a string containing a phone number, extract the country code portion, and
- * return it.
- *
- * @param $number
- *   A string containing a phone number.
- * @param $require_prefix
- *   A Boolean. If TRUE, the $number must begin with a + or it will be assumed not to contain a country code.
- * @return
- *   A string containing a country code, or NULL if the country code cannot be identified. 
- */
-function world_phone_country_code_from_number($number, $require_prefix = TRUE) {
-  if ($require_prefix && (! _world_phone_number_has_intl_prefix($number))) {
-    return NULL;
-  }
-  // strip everything but digits
-  $n = preg_replace('/[^0-9]/', '', $number);
-  // take the first few digits at a time and match against the phone codes.
-  // see http://en.wikipedia.org/wiki/List_of_country_calling_codes for explanation of this algorithm
-  $len = 1;
-  $maxlen = (strlen($n) >= 3) ? 3 : strlen($n);
-  for ($len = 1; $len <= $maxlen; $len++) {
-    $ccode = substr($n, 0, $len);
-    if (world_phone_country_code_exists($ccode) || $len == 3) {
-      if ($ccode == '1') {
-        // code 1 is special: it might be the start of a four-digit code
-        $long_ccode = substr($n, 0, 4);
-        if (world_phone_country_code_exists($long_ccode)) {
-          return $long_ccode;
-        }
-      }
-      return $ccode;
-    }
-  }
-  return NULL;
-}
-
-/**
- * Given a phone number string (which may or may not include a country code
- * already) and, optionally, a separately-specified country code, determine
- * which country code should be used for the number and return an array of
- * information about it.
- *
- * @param $number
- *   A string containing a phone number, possibly with a country code included in the string.
- * @param $country_code
- *   (Optional) A country code. This may be used for the number if the number doesn't already
- *   include one.
- * @return
- *   An array specifying the country code that should be used, and how it was determined.
- *   Array keys:
- *   - value: The country code itself.
- *   - source: A string indicating how the 'value' was determined. May be one of the
- *     following strings:
- *     - 'redundant': The number includes a country code which matches the
- *        specified $country_code argument.
- *     - 'conflict': The number's country code disagrees with the specified
- *        $country_code argument, so the number's country code was assumed to be correct.
- *     - 'number': The number includes a country code and no $country_code argument was
- *        provided, so the number's code was used.
- *     - 'country_code': The number does not include a country code, so the $country_code
- *        argument was used.
- *     - 'default': The number contains no country code and no $country_code argument was
- *        provided, so the sitewide default country code was used.
- */
-function _world_phone_determine_country_code($number, $country_code = NULL) {
-  $number_ccode = world_phone_country_code_from_number($number);
-  if ($number_ccode && (! empty($country_code)) && $country_code == $number_ccode) {
-    return array(
-      'value' => $number_ccode,
-      'source' => 'redundant',
-    );
-  }
-  if ($number_ccode && (! empty($country_code)) && ($country_code != '-1')) {
-    return array(
-      'value' => $number_ccode,
-      'source' => 'conflict',
-    );
-  }
-  if ($number_ccode) {
-    return array(
-      'value' => $number_ccode,
-      'source' => 'number',
-    );
-  }
-  if (empty($country_code) || $country_code == '-1') {
-    return array(
-      'value' => variable_get('world_phone_default_country_code', '1'),
-      'source' => 'default',
-    );
-  }
-  return array(
-    'value' => $country_code,
-    'source' => 'country_code',
-  );
-}
 
 /**
  *  Return a dialable version of the given number with the given country code.
@@ -718,8 +557,8 @@ function _world_phone_determine_country_code($number, $country_code = NULL) {
  *  @param $number
  *    The number to dial.
  *
- *  @param $country_code
- *    The country code to add to the $number. If the $number already begins
+ *  @param $country
+ *    The country that the number is for. If the $number already begins
  *    with + and includes a country code, this argument will be ignored.
  *
  * @param $from_country 
@@ -739,15 +578,15 @@ function _world_phone_determine_country_code($number, $country_code = NULL) {
  *   e.g., the local area code/numbering exchange of the phone we intend to
  *   dial out from.
  */
-function world_phone_number_to_dial($number, $country_code = NULL, $from_country = NULL, $addl_args = array()) {
+function world_phone_number_to_dial($number, $country = NULL, $from_country = NULL, $addl_args = array()) {
   if ($from_country) {
-    $to_dial = world_phone_country_invoke($from_country, 'number_to_dial', $number, $country_code, $addl_args);
+    $to_dial = world_phone_country_invoke($from_country, 'number_to_dial', $number, $country, $addl_args);
     if ($to_dial) {
       return $to_dial;
     }
   }
-  $ccode = _world_phone_determine_country_code($number, $country_code);
-  $to_dial = _world_phone_number_add_country_code($number, $ccode['value']);
+  $num = WorldPhoneNumber::create($number, $country);
+  $to_dial = $num->get_number_with_country_code();
   // remove all non-digits
   return preg_replace('/[^0-9]/', '', $to_dial);
 }
@@ -772,15 +611,16 @@ function world_phone_number_to_dial($number, $country_code = NULL, $from_country
 /**
  * Invoke a hook that's associated with a given country.
  *
- * @param $country_code
- *   The telephone country code
+ * @param $country
+ *   The country, represented as an ISO 3166-1a2 two-character code.
  * @param $hook
  *   The name of the hook to invoke.
  * @param ...Arguments to pass to the hook
  */
+// TODO : rewrite around country, not country code
 function world_phone_country_invoke() {
   $args = func_get_args();
-  $ccode = array_shift($args);
+  $c = array_shift($args);
   $hook = array_shift($args);
 
   // TODO - make the hook mechanism real
@@ -797,7 +637,7 @@ function world_phone_country_invoke() {
  * user. The output is checked using check_plain to be sure it is safe to show
  * the user.
  */
-function world_phone_default_format_number($number, $country_code = NULL, $include_country_code = TRUE) {
+function world_phone_default_format_number($number, $country = NULL, $include_country_code = TRUE) {
   // return a blank value, to force the module to handle this using its default code
   return '';
 }
@@ -812,10 +652,11 @@ function world_phone_default_format_number($number, $country_code = NULL, $inclu
  * code -- the user may have specified the country code by some other means.
  * 
  **/
-function world_phone_default_validate_number($number, $country_code) {
+function world_phone_default_validate_number($number, $country) {
   // we allow nothing but numbers, with optional dashes, parens, and spaces and an optional + in front
   if (! (preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $number))) {
-    return array(t('Phone number contains an invalid character; only digits and + are allowed.'));
+    return array(t('Phone number contains an invalid character; ' .
+                   'only digits, spaces, parentheses, dashes, and + are allowed.'));
   }
   return array();
 }
@@ -828,11 +669,11 @@ function world_phone_default_validate_number($number, $country_code) {
  * Return a map of telephone country codes to ISO 3166-1-alpha-2
  * abbreviations.
  */
-function world_phone_country_code_to_abbrev_map() {
+function world_phone_country_code_to_country_map() {
   // This just wraps the map from the include file.
   $path = drupal_get_path('module', 'world_phone');
   require_once("./$path/country_codes.inc");
-  return _world_phone_country_code_to_abbrev_map();
+  return _world_phone_country_code_to_country_map();
 }
 
 /**
@@ -850,10 +691,30 @@ function world_phone_country_code_to_abbrev_map() {
  *   given country code, or NULL if the country code does not correspond to a
  *   country.
  */
-function world_phone_country_abbrev_for_code($ccode) {
-  $map = world_phone_country_code_to_abbrev_map();
+function world_phone_country_from_country_code($ccode) {
+  $map = world_phone_country_code_to_country_map();
   if (isset($map[$ccode])) {
     return $map[$ccode];
+  }
+  return NULL;
+}
+
+/**
+ * Given an ISO 3166-1-alpha-2 abbreviation for a country of the world, return
+ * the telephone country code for that country.
+ *
+ * @param $country
+ *   The two-character ISO 3166-1-alpha-2 code representing a country.
+ * @return
+ *   The telephone country code for the given country.
+ */
+function world_phone_country_code_from_country($country) {
+  static $cached_map;
+  if (! isset($cached_map)) {
+    $cached_map = array_flip(world_phone_country_code_to_country_map());    
+  }
+  if (isset($cached_map[$country])) {
+    return $cached_map[$country];
   }
   return NULL;
 }
@@ -869,30 +730,8 @@ function world_phone_country_abbrev_for_code($ccode) {
  *   otherwise.
  */
 function world_phone_country_code_exists($ccode) {
-  return (world_phone_country_abbrev_for_code($ccode) !== NULL) ? TRUE : FALSE;
+  return (world_phone_country_from_country_code($ccode) !== NULL) ? TRUE : FALSE;
 }
-
-/**
- * Given an ISO 3166-1-alpha-2 abbreviation for a country of the world, return
- * the telephone country code for that country.
- *
- * @param $iso
- *   A string representing the two-character ISO 3166-1-alpha-2 code for a
- *   country.
- * @return
- *   The telephone country code for the given country.
- */
-function world_phone_country_code_for_abbrev($iso) {
-  static $cached_map;
-  if (! isset($cached_map)) {
-    $cached_map = array_flip(world_phone_country_code_to_abbrev_map());    
-  }
-  if (isset($cached_map[$iso])) {
-    return $cached_map[$iso];
-  }
-  return NULL;
-}
-
 
 /**
  * COUNTRY SELECTION WIDGET
@@ -900,7 +739,7 @@ function world_phone_country_code_for_abbrev($iso) {
 
 /**
  * Return a list of country names in proper format for a phone widget
- * dropdown: keyed by telephone country code, sorted alphabetically by name,
+ * dropdown: keyed by country (ISO 3166-1a2 two-character format), sorted alphabetically by name,
  * and themed with the 'world_phone_country_for_widget' theme.
  */
 function _world_phone_country_list_for_select() {
@@ -909,18 +748,18 @@ function _world_phone_country_list_for_select() {
   }
   $path = drupal_get_path('module', 'world_phone');
   require_once("./$path/country_short_names.inc");
-  $shortnames = _world_phone_country_abbrev_to_shortname_map();
+  $shortnames = _world_phone_country_to_shortname_map();
   
   // for each country code, format a menu item for the corresponding country
-  $ccodes = world_phone_country_code_to_abbrev_map();
+  $ccodes = world_phone_country_code_to_country_map();
   $by_name = array();
-  foreach ($ccodes as $country_code => $abbrev) {
-    if (isset($shortnames[$abbrev])) {
-      $shortname = $shortnames[$abbrev];
+  foreach ($ccodes as $country_code => $country) {
+    if (isset($shortnames[$country])) {
+      $shortname = $shortnames[$country];
       if (! isset($by_name[$shortname])) {
         $by_name[$shortname] = array(
-          $country_code,
-          theme('world_phone_country_for_widget', $abbrev, $shortname, $country_code),
+          $country,
+          theme('world_phone_country_for_widget', $country, $shortname, $country_code),
         );
       }
     }
@@ -940,17 +779,17 @@ function _world_phone_country_list_for_select() {
  * Format a row for the options list that is used to select countries for a
  * phone number.
  *
- * @param $abbrev
+ * @param $country
  *   The country's ISO 3166 two-letter country abbreviation.
- * @param $name
+ * @param $short_name
  *   The country's short name.
  * @param $code
  *   The country's telephone country code.
  *
  * @ingroup themeable
  */
-function theme_world_phone_country_for_widget($abbrev, $name, $code) {  
-  return str_repeat('&nbsp', 4 - strlen($code)) . '+' . $code . '&nbsp;&nbsp;' . $name;
+function theme_world_phone_country_for_widget($country, $short_name, $code) {
+  return str_repeat('&nbsp', 4 - strlen($code)) . '+' . $code . '&nbsp;&nbsp;' . $short_name;
 }
 
 /**

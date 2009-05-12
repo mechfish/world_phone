@@ -21,9 +21,10 @@
  *   An array with telephone country codes as keys and ISO 3166-1-alpha-2
  *   country codes as values.
  */
-function _world_phone_country_code_to_abbrev_map() {
+function _world_phone_country_code_to_country_map() {
   return array (
-// Canadians: You're out of luck for now. Please forward complaints to the ITU-T. :)
+// Canadian phone numbers are interpreted as US numbers, since they can't be
+// distinguished by country code
 //    '1' => 'CA',
     '1' => 'US',
     '1242' => 'BS',
