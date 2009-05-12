@@ -143,6 +143,7 @@ function world_phone_field($op, &$node, $field, &$items, $teaser, $page) {
   switch ($op) {
     case 'validate':
       // the widget is responsible for validating the contents of this field.
+      // TODO - we want to support programmatic saving of fields, so implement validation here instead.
       break;
 
     case 'submit':
@@ -244,6 +245,10 @@ function world_phone_widget($op, &$node, $field, &$items) {
   global $user;
   switch ($op) {
     case 'prepare form values':
+      // Determine the correct country for each phone number, and
+      // remove the country code from the number portion if necessary.
+      // Stash the intermediate results in 'default phones' or 'default phone',
+      // depending on whether the field is single or multiple-valued.
       if ($field['multiple']) {
         $arr = array();
         foreach ($items as $item) {
@@ -257,6 +262,8 @@ function world_phone_widget($op, &$node, $field, &$items) {
       break;
 
     case 'form':
+      // return the form elements which make up the widget, filling them
+      // with the default value(s) computed in 'prepare form values', above     
       $form = array();
       
       $form[$field['field_name']] = array('#tree' => TRUE);
@@ -272,6 +279,7 @@ function world_phone_widget($op, &$node, $field, &$items) {
             $delta++;
           }        
         }
+        // add some empty widgets in case the user wants to add more phone numbers
         foreach (range($delta, $delta + 2) as $delta) {
           $form[$field['field_name']][$delta] = _world_phone_widget_item_form($field, NULL,
                                                                               ($delta == 0) ? NULL : '',
@@ -286,8 +294,8 @@ function world_phone_widget($op, &$node, $field, &$items) {
       return $form;
     
     case 'process form values':
+      // remove any empty form items beyond the first
       foreach ($items as $delta => $item) {
-        // do not save empty items beyond the first
         if ($item['value'] == '' && $delta > 0)  {
           unset($items[$delta]);
         }
@@ -302,6 +310,9 @@ function world_phone_widget($op, &$node, $field, &$items) {
 
 /**
  * world_phone_widget op 'prepare form values' -- helper function
+ *
+ * Determine the correct country for the phone number and remove the country code
+ * from the text of the number.
  */
 function _world_phone_prepare_for_widget($field, $data) {
   $num = $data['value'];
@@ -315,6 +326,8 @@ function _world_phone_prepare_for_widget($field, $data) {
 
 /**
  *  world_phone_widget op 'form' -- helper function
+ *
+ *  Return a world_phone_number custom form element for use in the widget.
  */
 function _world_phone_widget_item_form($field, $phone, $title = NULL, $required = NULL) {
   $form = array(
