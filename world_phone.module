@@ -200,7 +200,7 @@ function world_phone_field_formatter($field, $item, $formatter, $node) {
       break;
     case 'dialable':
       $formatted = world_phone_number_to_dial($item['value'], $item['country_code']);
-      return theme('world_phone_dialable', $formatted, check_plain($item['value']), check_plain($item['country_code']));
+      return theme('world_phone_dialable', check_plain($formatted), check_plain($item['value']), check_plain($item['country_code']));
     default:
       break;
   }
