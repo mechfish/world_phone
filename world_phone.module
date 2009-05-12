@@ -333,7 +333,7 @@ function _world_phone_widget_item_form($field, $phone, $title = NULL, $required 
 
 
 /**
- * Defining a custom form element for world phone numbers: world_phone_number
+ * Define a custom form element for world phone numbers: world_phone_number
  *
  * A user may add this element to any form. It accepts a #default_value (and
  * returns a value) which is an array with "country_code" and "value"
@@ -359,7 +359,10 @@ function world_phone_elements() {
 }
 
 /**
- * Expand the definition of a world_phone_number form element.
+ * Accept a world_phone_number form element and install two child elements in
+ * the form: 'country_code' (a select menu) and 'value' (a textfield').
+ *
+ * This is a #process handler for world_phone_number form elements.
  */
 function world_phone_number_expand($element) {
   global $user;
@@ -407,7 +410,7 @@ function world_phone_number_validate($element) {
 }
 
 /**
- * Format a world_phone_number form widget.
+ * Format a world_phone_number form element.
  *
  * @ingroup themeable
  **/
@@ -568,20 +571,6 @@ function _world_phone_number_add_country_code($number, $country_code) {
 function world_phone_parse_number_text($number) {
   return array(
     'country_code' => world_phone_country_code_from_number($number),
-    'value' => _world_phone_number_remove_country_code($number),
-  );
-}
-
-/**
- * Accept a text string representing a phone number and return an array with
- * country_code and value components. The country_code component represents our
- * best guess to the number's country code -- it may be derived from the number, or
- * from the site defaults, or from the provided $country_code_hint. The value
- * will be the original number with any country_code removed.
- */
-function world_phone_interpret_number_text($number, $country_code_hint = NULL) {
-  return array(
-    'country_code' => _world_phone_determine_country_code($number, $country_code_hint),
     'value' => _world_phone_number_remove_country_code($number),
   );
 }
