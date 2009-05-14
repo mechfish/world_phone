@@ -24,7 +24,7 @@
 function _world_phone_country_to_shortname_map() {
   return array(
     'CA' => t('Canada'),
-    'US' => t('USA/Canada'), // should be "United States" once we handle Canada better
+    'US' => t('United States'),
     'BS' => t('Bahamas'),
     'BB' => t('Barbados'),
     'AI' => t('Anguilla'),

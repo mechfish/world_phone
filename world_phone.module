@@ -538,8 +538,9 @@ function world_phone_format_number($number, $country = NULL, $include_country_co
       return check_plain($num->get_number());
       break;
     default:
-      $default_country = variable_get('world_phone_default_country', 'US');
-      if ($default_country == $num->get_country()) {
+      $default_country_code = world_phone_country_code_from_country(
+        variable_get('world_phone_default_country', 'US'));
+      if ($default_country_code == $num->get_country_code()) {
         return check_plain($num->get_number());
       }
       else {
@@ -669,11 +670,28 @@ function world_phone_default_validate_number($number, $country) {
  * Return a map of telephone country codes to ISO 3166-1-alpha-2
  * abbreviations.
  */
-function world_phone_country_code_to_country_map() {
+function world_phone_country_to_country_code_map() {
   // This just wraps the map from the include file.
   $path = drupal_get_path('module', 'world_phone');
   require_once("./$path/country_codes.inc");
-  return _world_phone_country_code_to_country_map();
+  return _world_phone_country_to_country_code_map();
+}
+
+/**
+ * Given an ISO 3166-1-alpha-2 abbreviation for a country of the world, return
+ * the telephone country code for that country.
+ *
+ * @param $country
+ *   The two-character ISO 3166-1-alpha-2 code representing a country.
+ * @return
+ *   The telephone country code for the given country.
+ */
+function world_phone_country_code_from_country($country) {
+  $map = world_phone_country_to_country_code_map();
+  if (isset($map[$country])) {
+    return $map[$country];
+  }
+  return NULL;
 }
 
 /**
@@ -692,29 +710,12 @@ function world_phone_country_code_to_country_map() {
  *   country.
  */
 function world_phone_country_from_country_code($ccode) {
-  $map = world_phone_country_code_to_country_map();
-  if (isset($map[$ccode])) {
-    return $map[$ccode];
-  }
-  return NULL;
-}
-
-/**
- * Given an ISO 3166-1-alpha-2 abbreviation for a country of the world, return
- * the telephone country code for that country.
- *
- * @param $country
- *   The two-character ISO 3166-1-alpha-2 code representing a country.
- * @return
- *   The telephone country code for the given country.
- */
-function world_phone_country_code_from_country($country) {
   static $cached_map;
   if (! isset($cached_map)) {
-    $cached_map = array_flip(world_phone_country_code_to_country_map());    
+    $cached_map = array_flip(world_phone_country_to_country_code_map());    
   }
-  if (isset($cached_map[$country])) {
-    return $cached_map[$country];
+  if (isset($cached_map[$ccode])) {
+    return $cached_map[$ccode];
   }
   return NULL;
 }
@@ -750,10 +751,10 @@ function _world_phone_country_list_for_select() {
   require_once("./$path/country_short_names.inc");
   $shortnames = _world_phone_country_to_shortname_map();
   
-  // for each country code, format a menu item for the corresponding country
-  $ccodes = world_phone_country_code_to_country_map();
+  // format a menu item for each country that has a country code
+  $countries = world_phone_country_to_country_code_map();
   $by_name = array();
-  foreach ($ccodes as $country_code => $country) {
+  foreach ($countries as $country => $country_code) {
     if (isset($shortnames[$country])) {
       $shortname = $shortnames[$country];
       if (! isset($by_name[$shortname])) {

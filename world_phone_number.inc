@@ -125,6 +125,13 @@ class WorldPhoneNumber {
   }
 
   /**
+   * Return the country code for this WorldPhoneNumber's country.
+   */
+  function get_country_code() {
+    return world_phone_country_code_from_country($this->country);
+  }
+
+  /**
    * Return this phone number together with a country code prefix.
    */
   function get_number_with_country_code() {
