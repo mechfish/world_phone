@@ -184,10 +184,6 @@ function world_phone_field_formatter_info() {
     ),
   );
  } 
- 
-define('WORLD_PHONE_FORMAT_FOREIGN_COUNTRY_ONLY', 0);
-define('WORLD_PHONE_FORMAT_WITHOUT_COUNTRY', 1);
-define('WORLD_PHONE_FORMAT_WITH_COUNTRY', 2);
 
 /**
  * Implementation of hook_field_formatter().
@@ -196,40 +192,45 @@ function world_phone_field_formatter($field, $item, $formatter, $node) {
   if (! isset($item['number'])) {
     return '';
   }
-  $fmt = WORLD_PHONE_FORMAT_FOREIGN_COUNTRY_ONLY;
+  $num = WorldPhoneNumber::create($item['number'], $item['country']);
+  $fmt = WorldPhoneNumber::FORMAT_WITH_FOREIGN_COUNTRY;
   switch ($formatter) {
     case 'with_country':
-      $fmt = WORLD_PHONE_FORMAT_WITH_COUNTRY;
+      $fmt = WorldPhoneNumber::FORMAT_WITH_COUNTRY;
       break;
     case 'without_country':
-      $fmt = WORLD_PHONE_FORMAT_WITHOUT_COUNTRY;
+      $fmt = WorldPhoneNumber::FORMAT_WITHOUT_COUNTRY;
       break;
     case 'dialable':
-      // TODO: work out semantics for determining the origin country of a dialed number
-      $formatted = world_phone_number_to_dial($item['number'], $item['country']);
-      return theme('world_phone_dialable', check_plain($formatted), check_plain($item['number']), check_plain($item['country']));
+      return theme('world_phone_dialable', $num->format_for_dialing());
     default:
       break;
   }
-  $formatted = world_phone_format_number($item['number'], $item['country'], $fmt);
-  return theme('world_phone', $formatted, check_plain($item['number']), check_plain($item['country']));
+  return theme('world_phone', $num->format($fmt));
 }
 
 /**
  * Format a dialable phone number.
  *
+ * @param $number
+ *   A phone number with country code, formatted for dialing (with digits only).
+ *
  * @ingroup themeable
  */
-function theme_world_phone_dialable($number, $orig_number, $ccode) {
-  return '<span class="world-phone">' . $number . '</span>';
+function theme_world_phone_dialable($number) {
+  // by default, do nothing special
+  return theme('world_phone', $number);
 }
 
 /**
  * Format a phone number for display.
  *
+ * @param $number
+ *   A WorldPhoneNumber object containing the phone number to be formatted.
+ *   
  * @ingroup themeable
  */
-function theme_world_phone($number, $orig_number, $ccode) {
+function theme_world_phone($number) {
   return '<span class="world-phone">' . $number . '</span>';
 }
 
@@ -421,8 +422,17 @@ function world_phone_number_expand($element) {
  **/
 function world_phone_number_validate($element) {
   if (! empty($element['#value']['number'])) {
-    $validation = _world_phone_number_validate($element['#value']);
-    foreach ($validation as $msg) {
+    $errors = array();
+    $num = WorldPhoneNumber::create($element['#value']['number'], $element['#value']['country']);
+    $policy = variable_get('world_phone_country_policy', 'use_site_default');
+    if ($num->country_source() == 'conflict') {
+      $errors[] = t('The phone number begins with a country code that disagrees with that selected in the pulldown menu.');
+    }
+    if ($num->country_source() == 'default' && $policy == 'require') {
+      $errors[] = t('You must enter a country code for this phone number');
+    }
+    $errors = array_merge($errors, $num->get_validation_errors());    
+    foreach ($errors as $msg) {
       form_set_error(implode('][', $element['#parents']), $msg);
     }
   }
@@ -481,116 +491,6 @@ function _world_phone_default_country_for_user($user) {
   return variable_get('world_phone_default_country', 'US');
 }
 
-/**
- * Determine if the $num_array represents a valid phone number. If the phone
- * number includes a country specification and country-specific validation routines are
- * available for that country, those routines will be used for validiation.
- *
- * @param $num_array
- *   An array representing a phone number, with these keys:
- *     - 'number' => the number, as a string
- *     - 'country' => an explicitly specified two-letter country abbreviation. May be NULL.
- * @return
- *   TRUE if $num_array is a valid phone number, FALSE otherwise.
- */
-function _world_phone_number_validate($num_array) {
-  $result = array();
-  $num = WorldPhoneNumber::create($num_array['number'], $num_array['country']);
-  $policy = variable_get('world_phone_country_policy', 'use_site_default');
-  if ($num->country_source() == 'conflict') {
-    $result[] = t('The phone number begins with a country code that disagrees with that selected in the pulldown menu.');
-  }
-  if ($num->country_source() == 'default' && $policy == 'require') {
-    $result[] = t('You must enter a country code for this phone number');
-  }
-  $hook_result = world_phone_country_invoke($num->get_country(), 'validate_number', $num->get_number(), $num->get_country());
-  if (! is_array($hook_result)) {
-    // the country invocation failed for some reason.
-    // we allow nothing but numbers, with optional dashes, parens, and spaces and an optional + in front
-    if (! (preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $num->get_number()))) {
-      $result[] = t('Phone number contains an invalid character; ' .
-                    'only digits, spaces, parentheses, dashes, and + are allowed.');
-    }
-    return $result;
-  }
-  return array_merge($result, $hook_result);
-}
-
-/**
- * Accepts a number and converts it to a canonical form to display to the
- * user. The output is checked using check_plain to be sure it is safe to show
- * the user.
- */
-function world_phone_format_number($number, $country = NULL, $include_country_code = WORLD_PHONE_FORMAT_FOREIGN_COUNTRY_ONLY) {
-  $num = WorldPhoneNumber::create($number, $country);
-  $fmt_number = world_phone_country_invoke($num->get_country(), 'format_number', 
-                                           $num->get_number(), $num->get_country(), $include_country_code);
-  if (! empty($fmt_number)) {
-    return $fmt_number;
-  }
-  // the hook invocation failed, so handle this ourselves
-  $src = $num->country_source();
-  switch ($include_country_code) {
-    case WORLD_PHONE_FORMAT_WITH_COUNTRY:
-      return check_plain($num->get_number_with_country_code());
-      break;
-    case WORLD_PHONE_FORMAT_WITHOUT_COUNTRY:
-      return check_plain($num->get_number());
-      break;
-    default:
-      $default_country_code = world_phone_country_code_from_country(
-        variable_get('world_phone_default_country', 'US'));
-      if ($default_country_code == $num->get_country_code()) {
-        return check_plain($num->get_number());
-      }
-      else {
-        return check_plain($num->get_number_with_country_code());
-      }
-      break;
-  }
-  return check_plain($fmt_number);
-}
-
-
-/**
- *  Return a dialable version of the given number with the given country code.
- *
- *  @param $number
- *    The number to dial.
- *
- *  @param $country
- *    The country that the number is for. If the $number already begins
- *    with + and includes a country code, this argument will be ignored.
- *
- * @param $from_country 
- *   Optional: the telephone country code of the country that we are dialing
- *   out from. If this is not provided or is NULL, no dial-out prefix will be
- *   added; otherwise the module will attempt to add the appropriate
- *   international dial-out prefix to the number. (By default, this will be
- *   00, which is according to ITU standards. But there are many
- *   country-by-country exceptions; see
- *   http://en.wikipedia.org/wiki/List_of_international_call_prefixes . If
- *   this function does not work for your specific country you may need to
- *   write a hook.)  TODO: better documentation of this hook name
- *
- * @param $addl_args
- *   Optional: An array of additional arguments to pass to the
- *   country-specific formatter specified by $from_country. This may include,
- *   e.g., the local area code/numbering exchange of the phone we intend to
- *   dial out from.
- */
-function world_phone_number_to_dial($number, $country = NULL, $from_country = NULL, $addl_args = array()) {
-  if ($from_country) {
-    $to_dial = world_phone_country_invoke($from_country, 'number_to_dial', $number, $country, $addl_args);
-    if ($to_dial) {
-      return $to_dial;
-    }
-  }
-  $num = WorldPhoneNumber::create($number, $country);
-  $to_dial = $num->get_number_with_country_code();
-  // remove all non-digits
-  return preg_replace('/[^0-9]/', '', $to_dial);
-}
 
 /*
  * HOOK MECHANISM
@@ -604,6 +504,7 @@ function world_phone_number_to_dial($number, $country = NULL, $from_country = NU
  * come to define more specialized behaviors for certain popular countries, but
  * anyone whose needs are not met by this module can implement some hooks to
  * add their own desired behaviors.
+ * 
  * Third-party modules can define how a country's phone numbers should be
  * handled by implementing one or more world_phone hooks, and then registering
  * to handle a particular country by implementing hook_world_phone_countries().
@@ -618,49 +519,194 @@ function world_phone_number_to_dial($number, $country = NULL, $from_country = NU
  *   The name of the hook to invoke.
  * @param ...Arguments to pass to the hook
  */
-// TODO : rewrite around country, not country code
 function world_phone_country_invoke() {
   $args = func_get_args();
-  $c = array_shift($args);
-  $hook = array_shift($args);
+  $country = array_shift($args);
+  $hook_name = 'world_phone_' . array_shift($args);
 
-  // TODO - make the hook mechanism real
-  $func = 'world_phone_default_' . $hook;
-  if (function_exists($func)) {
-    return call_user_func_array($func, $args);
-  }  
+  $hook_modules = _world_phone_modules_for_country_hook($country);
+  foreach ($hook_modules as $module) {
+    if (module_hook($module, $hook_name)) {
+      return call_user_func_array($module . '_' . $hook_name, $args);
+    }
+  }
+  // couldn't find a hook to run
+  return NULL;
 }
 
 /**
- * Implementation of hook_format_number().
+ * Given a country, retrieve a list of modules that implement world_phone
+ * hooks for that country. This list is cached; rebuild the site cache after
+ * implementing a new hook to ensure that it gets found.
  *
- * Accept a phone number and convert it to a canonical form to display to the
- * user. The output is checked using check_plain to be sure it is safe to show
- * the user.
+ * @param $country
+ *   An ISO 3166-1 country code.
+ * @return
+ *   A list of modules, ordered by the weight specified by each module's
+ *   hook_world_phone_countries().
  */
-function world_phone_default_format_number($number, $country = NULL, $include_country_code = TRUE) {
-  // return a blank value, to force the module to handle this using its default code
-  return '';
+function _world_phone_modules_for_country_hook($country) {
+  if ($map = cache_get('world_phone_modules_for_countries')) {
+    $map = unserialize($map->data);
+  }
+  else {
+    // build the map of countries to modules using hook_world_phone_countries()
+    $map = array();
+    $modules = module_implements('world_phone_countries');
+    foreach ($modules as $module) {
+    // TODO: uncomment this optimization after we test the hook mechanism
+      // skip this module, which implements a default hook for every country
+//      if ($module == 'world_phone') {
+//        continue;
+//      }
+      $countries = module_invoke($module, 'world_phone_countries');
+      foreach ($countries as $country => $weight) {
+        if (! isset($map[$country])) {
+          $map[$country] = array();          
+        }
+        $map[$country][$weight] = $module;
+      }
+    }
+    cache_set('world_phone_modules_for_countries', 'cache', serialize($map));
+  }
+  if (isset($map[$country])) {
+    return $map[$country];
+    // TODO: uncomment this optimization after we test the hook mechanism
+//    $result = array_merge($map[$country], array(10 => 'world_phone'));
+//    ksort($result);
+//    return $result;
+  }
+  else {
+    // the world_phone module provides a default implementation for every hook
+    return array(10 => 'world_phone');
+  }
 }
 
 /**
- * Implementation of hook_validate_number()
+ * WORLD_PHONE HOOK IMPLEMENTATIONS
  *
- * Accept a number as entered by the user and return an array of error
- * messages if that number is not valid. If the number is valid, return an empty array.
+ * The following hook implementations serve two purposes: They provide default
+ * behaviors for every single country in the country-code database, and they
+ * provide example implementations which other modules can use when they
+ * implement hooks.
+ */
+
+/**
+ * Implementation of hook_world_phone_countries().
  *
- * Note that unless it begins with '+' the $number may not contain a country
- * code -- the user may have specified the country code by some other means.
- * 
- **/
-function world_phone_default_validate_number($number, $country) {
+ * Return a list of countries that can be handled by the world_phone hooks defined
+ * in this module.
+ *
+ * @return
+ * An array with countries as keys and numerical weights as values. If there
+ * is more than one module that implements world_phone hooks for a given
+ * country, hooks with smaller weights will be used ahead of those with larger
+ * weights. The default hook implementations, provided by world_phone module
+ * itself, have a weight of 10.
+ */
+function world_phone_world_phone_countries() {
+  // return a list with every country as a key, and all values equal to 10
+  $countries = world_phone_country_to_country_code_map();
+  foreach ($countries as $country => $ccode) {
+    $countries[$country] = 10;
+  }
+  return $countries;
+}
+
+/**
+ * Implementation of hook_world_phone_validate().
+ *
+ * Determine if the given number represents a valid international phone number.
+ *
+ * @param $number
+ *   The number, without a country code.
+ * @param $country
+ *   The number's country, as an ISO 3166-1 two-character abbreviation.
+ * @return
+ *   An array of error messages, or an empty array if there are no validation errors.
+ */
+function world_phone_world_phone_validate($number, $country) {
   // we allow nothing but numbers, with optional dashes, parens, and spaces and an optional + in front
-  if (! (preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $number))) {
+  if (! preg_match('/^\s*\+?([-\s\)\(\d]+?)\s*$/', $number)) {
     return array(t('Phone number contains an invalid character; ' .
                    'only digits, spaces, parentheses, dashes, and + are allowed.'));
   }
   return array();
 }
+
+/**
+ * Implementation of hook_world_phone_format().
+ *
+ * Convert this phone number to a string for display to the user. Use country-specific
+ * formatting conventions if desired.
+ *
+ * @param $number
+ *   The number, without a country code.
+ * @param $country
+ *   The number's country, as an ISO 3166-1 two-character abbreviation.
+ * @param $fmt
+ *   Whether to include the country code in the formatted number. Should be one of
+ *   the constants WorldPhoneNumber::FORMAT_WITH_FOREIGN_COUNTRY,
+ *   WorldPhoneNumber::FORMAT_WITHOUT_COUNTRY, or
+ *   WorldPhoneNumber::FORMAT_WITH_COUNTRY
+ * @return
+ *   A phone number suitable for printing. The result has been passed through check_plain().
+ */
+function world_phone_world_phone_format($number, $country, $format) {
+  $country_code = world_phone_country_code_from_country($country);
+  switch ($format) {
+    case WorldPhoneNumber::FORMAT_WITH_COUNTRY:
+      break;
+    case WorldPhoneNumber::FORMAT_WITHOUT_COUNTRY:
+      return check_plain($number);
+      break;
+    case WorldPhoneNumber::FORMAT_WITH_FOREIGN_COUNTRY:
+    default:
+      $default_country_code = world_phone_country_code_from_country(
+        variable_get('world_phone_default_country', 'US'));
+      $country_code = world_phone_country_code_from_country($country);
+      if ($country_code && $default_country_code == $country_code) {
+        return check_plain($number);
+      }
+      break;
+  }
+  if ($country_code) {
+    return check_plain('+' . $country_code . ' ' . $number);
+  }
+  return check_plain($number);
+}
+
+/**
+ * Implementation of hook_world_phone_format_for_dialing().
+ *
+ * Convert the given phone number to a dialable string as if it were to be dialed
+ * from a phone located in the given $from_country.
+ *
+ * @param $from_country
+ *   The country that the number is to be dialed from. If not specified, or if
+ *   the module cannot find an implementation of hook_world_phone_format_for_dialing() for the
+ *   given country, a generic dialable number will be generated by simply removing
+ *   all non-digits from the number and returning it, prefixed with its country
+ *   code.
+ * @param $number
+ *   The number, without a country code.
+ * @param $country
+ *   The number's country, as an ISO 3166-1 two-character abbreviation.
+ * @param $addl_args
+ *   Optional: An array of additional arguments to pass to the
+ *   country-specific formatter specified by $from_country. This may include,
+ *   e.g., the local area code/numbering exchange of the phone we intend to
+ *   dial out from.
+ * @return
+ *   A number that consists entirely of digits and includes a country code. The
+ *   result has been passed through check_plain().
+ */
+function world_phone_world_phone_format_for_dialing($from_country, $number, $country, $addl_args) {
+  // the default hook just adds the country code to the number and strips all non-digits
+  $with_code = world_phone_country_code_from_country($country) . $number;
+  return check_plain(preg_replace('/[^0-9]/', '', $with_code));
+}
+
 
 /**
  * COUNTRY CODES, ABBREVIATIONS, AND NAMES
