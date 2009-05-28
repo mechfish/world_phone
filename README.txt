@@ -1,4 +1,4 @@
-/* $Id$ */
+$Id$
 
 CONTENTS OF THIS FILE
 ---------------------

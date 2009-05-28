@@ -1,3 +1,5 @@
+$Id$
+
 Entities which have ISO 3166-1 codes but no phone country codes.
 
 This list was compiled during the process of keying in the relevant
