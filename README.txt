@@ -16,20 +16,24 @@ INTRODUCTION
 Current Maintainer: Michael F. Booth (aka mechfish) <mike@literate-devices.com>
 
 World Phone module implements a CCK field for entering international
-phone numbers with country codes. The user may select country codes
-from a dropdown list of countries, or type them into a text box.
+phone numbers with country codes. Administrators may add one or more
+phone number fields to any node type. When entering phone numbers, a
+site's users may select country codes from a dropdown list of
+countries, or include them with the typed number itself by prefixing
+it with a "+" sign.
 
 When displayed, numbers can be shown with or without their country
-codes. There is also a setting for suppressing the country code if it matches the
-site's default country code. (So that, e.g., a site based in the UK
-can display country codes for any non-UK phone number.)
+codes. The module can also suppress the display of a country code if
+it matches the default country code for the site. (So that, for
+example, a site based in the UK can be configured to display country
+codes only for non-UK phone numbers.)
 
 This module includes basic support for every country code defined in
-ITU-T recommendation E.164 (see the countries/wp_default.inc file for
+ITU-T recommendation E.164 (see the country_codes.inc file for
 more details).
 
 For phone numbers which are restricted to a single country, you may
-wish to use the classic Phone CCK module instead.
+wish to use the Phone CCK module instead.
 
 
 INSTALLATION
@@ -75,5 +79,6 @@ This module was originally developed by:
 Thanks to all the authors of Phone module and the other Drupal modules
 that inspired this one.
 
-This module makes use of Sam Collett's jQuery Selectboxes module,
-under the MIT and/or GPL licenses.  Kudos to him, and see http://www.texotela.co.uk
+For the moment, this module incorporates Sam Collett's jQuery Selectboxes 
+module, under its GPL license. See http://www.texotela.co.uk/
+
